@@ -19,6 +19,7 @@ import WorkflowView from './components/WorkflowView.jsx';
 import AlertManagerView from './components/AlertManagerView.jsx';
 import AlertToast from './components/AlertToast.jsx';
 import ArchiveManagerView from './components/ArchiveManagerView.jsx';
+import PortfolioRiskView from './components/PortfolioRiskView.jsx';
 
 import {
   fetchLiveQuotes,
@@ -448,6 +449,22 @@ export default function App() {
         }
       }
 
+      // If a risk query or kill switch command was run, switch to risk view
+      const lowerCmd = commandText.toLowerCase();
+      if (
+        data.risk ||
+        lowerCmd.includes('portfolio risk') ||
+        lowerCmd.includes('portfolio heat') ||
+        lowerCmd.includes('kill switch') ||
+        lowerCmd.includes('killswitch') ||
+        lowerCmd.includes('stress test') ||
+        lowerCmd.includes('risk budget') ||
+        lowerCmd.includes('defensive plan') ||
+        lowerCmd.includes('reduce my risk')
+      ) {
+        setActiveTab('risk');
+      }
+
       // Speak response out loud
       if (data.spokenText) {
         speakResponse(data.spokenText);
@@ -713,6 +730,20 @@ export default function App() {
       {activeTab === 'archive' && (
         <div style={{ padding: '8px 0', height: '100%', overflow: 'hidden' }}>
           <ArchiveManagerView
+            onSendToChart={(sym) => {
+              setChartSymbol(sym);
+              setActiveTab('chart');
+            }}
+            onNotify={(agent, message, color) => addSignal(agent, message, color)}
+            onSpeak={(text) => speakResponse(text)}
+          />
+        </div>
+      )}
+
+      {/* SENTINEL-X — Portfolio Risk, Heat, Correlation, Kill Switch */}
+      {activeTab === 'risk' && (
+        <div style={{ padding: '8px 0', height: '100%', overflow: 'hidden' }}>
+          <PortfolioRiskView
             onSendToChart={(sym) => {
               setChartSymbol(sym);
               setActiveTab('chart');

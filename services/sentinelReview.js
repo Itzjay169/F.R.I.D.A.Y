@@ -1,4 +1,5 @@
 import { validateSentinelVerdict } from '../shared/contract.js';
+import { pretradePortfolioCheck } from './sentinel-x/pretradeCheck.js';
 
 /**
  * Default Risk Limits for Sentinel
@@ -217,4 +218,64 @@ function createVerdict(data) {
     throw new Error(`Sentinel verdict failed validation: ${validation.errors.join('; ')}`);
   }
   return verdict;
+}
+
+/**
+ * Phase 7.5: Evaluates a trade proposal through BOTH:
+ * 1. SENTINEL trade-level risk review
+ * 2. SENTINEL-X portfolio-level risk check
+ */
+export function reviewTradePlanWithSentinelSuite(plan, options = {}) {
+  // Level 1: SENTINEL Trade-Level Check
+  const tradeVerdict = reviewTradePlanWithSentinel(plan, options);
+  if (tradeVerdict.verdict === 'veto') {
+    return {
+      ...tradeVerdict,
+      sentinel_x_checked: false,
+      portfolio_verdict: null
+    };
+  }
+
+  // Level 2: SENTINEL-X Portfolio-Level Check
+  const portfolioPositions = options.portfolioPositions || options.positions || [];
+  const accountSnapshot = options.accountSnapshot || { current_equity: options.config?.deskEquity || 1604199.00 };
+
+  const portfolioVerdict = pretradePortfolioCheck(
+    plan,
+    portfolioPositions,
+    accountSnapshot,
+    options.config
+  );
+
+  // If portfolio check issues veto, overall verdict is veto
+  if (portfolioVerdict.verdict === 'veto') {
+    return {
+      ...tradeVerdict,
+      verdict: 'veto',
+      reason: `SENTINEL-X PORTFOLIO VETO: ${portfolioVerdict.reason}`,
+      required_changes: [...tradeVerdict.required_changes, ...portfolioVerdict.required_changes],
+      sources: [...tradeVerdict.sources, ...portfolioVerdict.sources],
+      sentinel_x_checked: true,
+      portfolio_verdict: portfolioVerdict
+    };
+  }
+
+  // If portfolio check issues modify, overall verdict is modify
+  if (portfolioVerdict.verdict === 'modify') {
+    return {
+      ...tradeVerdict,
+      verdict: 'modify',
+      reason: `SENTINEL-X PORTFOLIO MODIFICATION: ${portfolioVerdict.reason}`,
+      required_changes: [...tradeVerdict.required_changes, ...portfolioVerdict.required_changes],
+      sources: [...tradeVerdict.sources, ...portfolioVerdict.sources],
+      sentinel_x_checked: true,
+      portfolio_verdict: portfolioVerdict
+    };
+  }
+
+  return {
+    ...tradeVerdict,
+    sentinel_x_checked: true,
+    portfolio_verdict: portfolioVerdict
+  };
 }

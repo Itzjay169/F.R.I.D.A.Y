@@ -62,7 +62,14 @@ import {
 } from './services/archive/archivePersistence.js';
 import { hybridSearch } from './services/archive/retrieval.js';
 import { getReviewStats } from './services/archive/reviewEngine.js';
-
+import { SentinelXAgent } from './agents/sentinel-x/sentinelXAgent.js';
+import { calculateAccountSnapshot, calculatePortfolioHeat } from './services/sentinel-x/portfolioRiskModel.js';
+import { calculateCorrelationMatrix, detectCorrelatedClusters } from './services/sentinel-x/correlationEngine.js';
+import { runStressTest } from './services/sentinel-x/stressTesting.js';
+import { calculateRiskBudget } from './services/sentinel-x/riskBudget.js';
+import { killSwitchManager } from './services/sentinel-x/killSwitch.js';
+import { generateRiskReductionPlan } from './services/sentinel-x/riskReductionPlanner.js';
+import { DEFAULT_RISK_CONFIG } from './shared/config.js';
 
 export default defineConfig({
   plugins: [
@@ -653,6 +660,165 @@ export default defineConfig({
             const body = await parseJson(req);
             const archive = new ArchiveAgent();
             const result = await archive.handleCommand(body.command || '', body.context || {});
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(result));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // ═══════════════════════════════════════════════════════════
+        // SENTINEL-X PORTFOLIO RISK API (Phase 7.5)
+        // ═══════════════════════════════════════════════════════════
+
+        // Portfolio Snapshot & Risk Summary
+        server.middlewares.use('/api/risk/portfolio', async (req, res) => {
+          try {
+            const paperSnap = getAccountSnapshot();
+            const snap = calculateAccountSnapshot(paperSnap);
+            const heat = calculatePortfolioHeat(snap.open_positions, snap.current_equity, snap.starting_equity);
+            killSwitchManager.evaluateAutoTriggers(snap, heat);
+            const killSwitch = killSwitchManager.getState();
+            const budget = calculateRiskBudget({ ...snap, total_heat_dollars: heat.total_heat_dollars }, killSwitch.active);
+
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({
+              status: 'ok',
+              snapshot: snap,
+              heat,
+              budget,
+              kill_switch: killSwitch
+            }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // Portfolio Heat
+        server.middlewares.use('/api/risk/heat', async (req, res) => {
+          try {
+            const paperSnap = getAccountSnapshot();
+            const snap = calculateAccountSnapshot(paperSnap);
+            const heat = calculatePortfolioHeat(snap.open_positions, snap.current_equity, snap.starting_equity);
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ status: 'ok', heat, equity: snap.current_equity }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // Correlation Matrix & Clusters
+        server.middlewares.use('/api/risk/correlation', async (req, res) => {
+          try {
+            const paperSnap = getAccountSnapshot();
+            const syms = (paperSnap.positions || []).map(p => p.symbol);
+            const matrix = calculateCorrelationMatrix(syms);
+            const clusters = detectCorrelatedClusters(paperSnap.positions || [], matrix);
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ status: 'ok', matrix, clusters }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // Stress Testing
+        server.middlewares.use('/api/risk/stress-test', async (req, res) => {
+          try {
+            let scenario = 'market_down_2_percent';
+            if (req.method === 'POST') {
+              const body = await parseJson(req);
+              if (body.scenario) scenario = body.scenario;
+            }
+            const paperSnap = getAccountSnapshot();
+            const result = runStressTest(paperSnap.positions || [], paperSnap.equity, scenario);
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ status: 'ok', result }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // Risk Budget
+        server.middlewares.use('/api/risk/budget', async (req, res) => {
+          try {
+            const paperSnap = getAccountSnapshot();
+            const snap = calculateAccountSnapshot(paperSnap);
+            const heat = calculatePortfolioHeat(snap.open_positions, snap.current_equity, snap.starting_equity);
+            const killSwitch = killSwitchManager.getState();
+            const budget = calculateRiskBudget({ ...snap, total_heat_dollars: heat.total_heat_dollars }, killSwitch.active);
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ status: 'ok', budget }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // Kill Switch (GET state, POST activate/deactivate)
+        server.middlewares.use('/api/risk/kill-switch', async (req, res) => {
+          try {
+            if (req.method === 'POST') {
+              const body = await parseJson(req);
+              if (body.action === 'activate') {
+                const result = killSwitchManager.activate({
+                  activated_by: 'user',
+                  reason: body.reason || 'User manual activation'
+                });
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ status: 'ok', state: result.state }));
+              }
+              if (body.action === 'deactivate') {
+                const result = killSwitchManager.deactivate({
+                  user_reason: body.reason,
+                  confirmed: body.confirmed
+                });
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify(result));
+              }
+            }
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ status: 'ok', state: killSwitchManager.getState() }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // Risk Reduction Planner
+        server.middlewares.use('/api/risk/reduce', async (req, res) => {
+          try {
+            const body = req.method === 'POST' ? await parseJson(req) : {};
+            const paperSnap = getAccountSnapshot();
+            const plan = generateRiskReductionPlan(paperSnap.positions || [], {
+              equity: paperSnap.equity,
+              targetReductionPercent: body.targetReductionPercent || 30,
+              targetSector: body.targetSector,
+              mode: body.mode || 'defensive'
+            });
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ status: 'ok', plan }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // SENTINEL-X Command (natural language dispatch)
+        server.middlewares.use('/api/risk/command', async (req, res) => {
+          if (req.method !== 'POST') {
+            res.statusCode = 405;
+            return res.end('Method not allowed');
+          }
+          try {
+            const body = await parseJson(req);
+            const agent = new SentinelXAgent();
+            const paperSnap = getAccountSnapshot();
+            const result = await agent.handleCommand(body.command || '', paperSnap);
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify(result));
           } catch (err) {

@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [7.5.0-sentinel-x-risk] - 2026-10-28
+### Completed: Phase 7.5 – SENTINEL-X: Portfolio Risk, Heat, Correlation, and Kill Switch
+- **SENTINEL-X Specialist Agent (`agents/sentinel-x/sentinelXAgent.js`, `agents/sentinel-x/index.js`)**:
+  - Serves as the Portfolio Risk Officer for the local paper ledger, assessing aggregate portfolio heat, correlation clusters, asset concentration, drawdown, daily loss limits, and scenario stress tests.
+  - Implements 13 natural language intents: `portfolio_risk_report`, `portfolio_heat`, `exposure_report`, `correlation_report`, `concentration_report`, `stress_test_portfolio`, `risk_budget_report`, `pretrade_portfolio_check`, `recommend_risk_reduction`, `activate_kill_switch`, `deactivate_kill_switch`, `explain_veto`, and `set_risk_limits`.
+  - Cold, conservative persona with strict non-execution invariant (`assertSentinelXCannotExecute`).
+- **Portfolio Risk Model & Heat Engine (`services/sentinel-x/portfolioRiskModel.js`)**:
+  - Mathematical portfolio heat: $\text{Portfolio Heat} = \sum_{i=1}^n |\text{Entry}_i - \text{Stop}_i| \times \text{Qty}_i$, expressed in both dollars and percentage of equity.
+  - Granular breakdown by sector/theme, asset class, direction, and single symbol.
+  - Account snapshot continuously calculated from local paper ledger: Starting/current equity, cash, gross/net exposure, long/short exposure, realized/unrealized P&L, daily P&L, peak equity, and drawdown.
+- **Rolling Returns Correlation & Cluster Engine (`services/sentinel-x/correlationEngine.js`)**:
+  - Rolling Pearson correlation matrix computed strictly from daily percentage returns ($R_t = \frac{P_t - P_{t-1}}{P_{t-1}}$), never raw price series, with transparent handling of missing historical data.
+  - Correlated cluster detection aggregating overlapping sector/macro factors and pairs exceeding correlation threshold ($r \ge 0.70$).
+  - Concentration monitors checking symbol ($\le 2\%$), sector ($\le 3\%$), and cluster ($\le 4\%$) heat caps.
+- **Scenario Stress Testing Engine (`services/sentinel-x/stressTesting.js`)**:
+  - 18 predefined market stress scenarios (e.g. Market Down 1/2/5/10%, Tech Down 5%, Semis Down 5%, Crypto Down 10%, VIX Spike 25%, Yields Up 25 bps, Liquidity Shock, Correlation Spike).
+  - Stop breach simulation and dollar/percentage equity loss modeling with full model honesty disclosures (`MODEL-ESTIMATED (NOT A PREDICTION)`).
+- **Daily & Weekly Risk Budget System (`services/sentinel-x/riskBudget.js`)**:
+  - Tracks daily loss budget (3% default) and weekly loss budget (8% default).
+  - Five-tier risk state machine: `GREEN` (normal), `YELLOW` (approaching limit), `ORANGE` (budget nearly exhausted), `RED` (daily loss or heat limit breached; new entries blocked), and `BLACK` (kill switch active).
+- **Portfolio Kill Switch (`services/sentinel-x/killSwitch.js`)**:
+  - Multi-vector activation: Manual voice/HUD or auto-trigger on daily loss limit, max drawdown breach, or heat hard limit.
+  - Protective stop/target preservation: Stops and targets remain active while all new trade entries and brackets are strictly blocked.
+  - Mandatory human confirmation for deactivation with logged reason and journal audit.
+- **Pretrade Portfolio Check & Pipeline Integration (`services/sentinel-x/pretradeCheck.js`, `services/sentinelReview.js`)**:
+  - Dual-gated verification: Trade-level Sentinel audit + Portfolio-level Sentinel-X pretrade check before trade plans can reach user confirmation or PILOT execution.
+  - Automatically identifies concentration breaches, heat limit violations, and daily budget exhaustion.
+- **Risk-Reduction Planner (`services/sentinel-x/riskReductionPlanner.js`)**:
+  - Recommends defensive trimming, position closure, or stop-tightening without executing autonomously.
+- **Cyber-HUD Portfolio Risk Desk (`app/src/components/PortfolioRiskView.jsx`)**:
+  - Full HUD panel with visual gauges for heat, daily budget, weekly budget, drawdown, and risk state.
+  - Real-time open position heat table, sector heat bars, correlation matrix, correlated clusters, interactive stress test selector, and emergency kill-switch controls.
+- **Verification & Testing (100% Pass Rate)**:
+  - **225 / 225 tests passing** across 21 test suites:
+    - `tests/contract/portfolio-risk/portfolio-risk-contract.test.js` (10 tests)
+    - `tests/unit/sentinel-x/sentinel-x.test.js` (13 tests)
+    - `tests/integration/portfolio-risk/portfolio-risk.test.js` (10 tests)
+    - `tests/performance/risk-calculations/risk-calculations.test.js` (8 tests)
+    - Plus all existing suites (archive, relay alerts, routines, compass, workflow engine, chart router, config).
+
 ## [6.5.0-archive-memory] - 2026-10-28
 ### Completed: Phase 6.5 – ARCHIVE: Research Memory, Playbooks, and Trade Reviews
 - **ARCHIVE Specialist Agent (`agents/archive/archiveAgent.js`, `agents/archive/index.js`)**:

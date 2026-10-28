@@ -49,6 +49,7 @@ graph TD
 | **LEDGER** | Trade journaling, paper P&L, audits | Paper execution stream | P&L records, performance metrics | **Audit Only** |
 | **RELAY** | Alert & routine manager, desk watchtower | Quotes, indicators, filings, calendar, positions | `AlertSchema`, `RoutineSchema`, `AlertTriggerEventSchema` | **Strictly Prohibited** |
 | **ARCHIVE** | Research librarian, playbooks, trade memory | Theses, notes, reviews, playbooks, trade history | `ResearchItemSchema`, `PlaybookSchema`, `TradeReviewSchema` | **Strictly Prohibited** |
+| **SENTINEL-X** | Portfolio risk officer, heat, correlation, kill switch | Book positions, return series, risk budgets, stress shocks | `PortfolioSnapshotSchema`, `PortfolioHeatSchema`, `KillSwitchStateSchema` | **Veto & Halt Authority (No Execution)** |
 
 ---
 
@@ -323,4 +324,69 @@ Blends 5 signals into a single relevance score with a human-readable match expla
   10. Completed post-trade review (+5)
 - Discipline score calculates execution faithfulness ($100 - \sum \text{penalties}$).
 - Objective separation: High process score can coexist with a losing trade, and winning trades can receive low process scores for poor discipline.
+
+---
+
+## 8. SENTINEL-X Portfolio Risk & Correlation Architecture (Phase 7.5)
+
+```mermaid
+graph TD
+    Proposal[New Trade Proposal] --> TradeGate{SENTINEL Level 1: Trade Check}
+    TradeGate -- Stop missing or R:R < 1.5R --> Veto1([VETO / MODIFY])
+    TradeGate -- Approved --> PortGate{SENTINEL-X Level 2: Portfolio Check}
+    
+    subgraph SENTINEL-X Portfolio Engine
+        KillSwitchCheck{Kill Switch Active?}
+        HeatModel[Portfolio Heat: sum(|Entry - Stop| * Qty)]
+        ConcEngine[Concentration & Cluster Auditor]
+        CorrEngine[Rolling Returns Correlation Matrix]
+        StressEngine[Scenario Stress Tester]
+        BudgetEngine[Daily & Weekly Risk Budget]
+    end
+
+    PortGate --> KillSwitchCheck
+    KillSwitchCheck -- Yes --> KillVeto([VETO: Kill Switch Active])
+    KillSwitchCheck -- No --> HeatModel
+    HeatModel --> ConcEngine
+    ConcEngine --> CorrEngine
+    CorrEngine --> StressEngine
+    StressEngine --> BudgetEngine
+
+    BudgetEngine -- Heat > 6% or Budget Exhausted --> PortVeto([VETO / MODIFY])
+    BudgetEngine -- Within Limits --> DualApproved([Dual Risk Approved])
+    DualApproved --> UserGate{Human Confirmation Gate}
+    UserGate --> Pilot[PILOT Paper Order Execution]
+```
+
+### 1. Three-Tier Risk Philosophy
+SENTINEL-X operationalizes risk across three distinct horizons:
+1. **Trade Level (SENTINEL)**: Entry trigger, directional stop-loss, position sizing, minimum 1.5R reward:risk, structural invalidation.
+2. **Portfolio Level (SENTINEL-X)**: Aggregated portfolio heat ($\sum \text{Risk}_i$), rolling returns correlation ($\rho$), sector concentration ($\le 3\%$), single-symbol concentration ($\le 2\%$), correlated cluster limits ($\le 4\%$), drawdown trajectory, and daily loss limits.
+3. **Behavioral Level**: Overtrading detection, revenge sizing checks, risk budget exhaustion guards, and mandatory human confirmation gates.
+
+### 2. Mathematical Heat & Exposure Model (`services/sentinel-x/portfolioRiskModel.js`)
+Portfolio heat represents the maximum capital at risk if every active position simultaneously hits its stop-loss:
+$$\text{Portfolio Heat} = \sum_{i=1}^n \text{Risk}_i = \sum_{i=1}^n |\text{Entry}_i - \text{Stop}_i| \times \text{Quantity}_i$$
+- **Limits**:
+  - `Hard Block`: 6.0% of current equity (new entries unconditionally blocked).
+  - `Soft Warning`: 4.0% of current equity (triggers visual caution and heightened pretrade scrutiny).
+  - `Sector Limit`: 3.0% of current equity per sector.
+  - `Cluster Limit`: 4.0% of current equity per correlated cluster.
+  - `Symbol Limit`: 2.0% of current equity per single ticker.
+
+### 3. Returns-Based Correlation & Cluster Engine (`services/sentinel-x/correlationEngine.js`)
+- **Return Series Formulation**: Correlation is computed from daily percentage returns ($R_t = \frac{P_t - P_{t-1}}{P_{t-1}}$), avoiding raw price co-trending fallacies.
+- **Pearson Matrix**: Standard 60-day rolling lookback across all active assets. Requires $\ge 5$ common return periods; never fabricates missing history.
+- **Cluster Detection**: Identifies shared-beta clusters across sectors (e.g., Semiconductors/AI Hardware: NVDA, AMD, SMCI) and macro risk factors (Crypto Beta, High-Beta Momentum).
+
+### 4. Scenario Stress Testing Engine (`services/sentinel-x/stressTesting.js`)
+- Evaluates non-linear shocks across 18 built-in scenarios (Market -1%/-2%/-5%/-10%, Tech -5%, Semis -5%, Dollar +1%, Yields +25bps, VIX +25%, Liquidity Shock, Gap Through Stop).
+- Tracks stop breach states and provides transparent `MODEL-ESTIMATED (NOT A PREDICTION)` banners, methodology, assumptions, and limitations.
+
+### 5. Risk Budgeting & The Kill Switch (`services/sentinel-x/riskBudget.js`, `services/sentinel-x/killSwitch.js`)
+- **Risk States**: `GREEN` (Normal), `YELLOW` (Soft warning), `ORANGE` (Budget $\ge 80\%$ used), `RED` (Limit breached), `BLACK` (Kill switch active).
+- **Kill Switch Safety Invariants**:
+  - Unconditionally blocks all new order creations.
+  - **Preserves all active protective stops and profit targets** to prevent unhedged market exposure.
+  - Deactivation strictly requires explicit human confirmation and documented reasoning.
 

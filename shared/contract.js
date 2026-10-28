@@ -502,4 +502,240 @@ export function validateTradeReview(data) {
   return { valid: true, data: res.data };
 }
 
+// ═══════════════════════════════════════════════════════════
+// PHASE 7.5 — SENTINEL-X PORTFOLIO RISK & HEAT SCHEMAS
+// ═══════════════════════════════════════════════════════════
+
+export const PositionRiskSchema = z.object({
+  symbol: z.string(),
+  direction: z.enum(['long', 'short']),
+  quantity: z.number(),
+  entry: z.number(),
+  current_price: z.number(),
+  market_value: z.number(),
+  stop: z.number(),
+  target: z.number().nullable().optional(),
+  initial_risk: z.number(),
+  current_open_risk: z.number(),
+  risk_r: z.number().nullable().optional(),
+  risk_percent_equity: z.number(),
+  unrealized_pnl: z.number(),
+  time_in_trade: z.string().optional(),
+  sector: z.string().default('General'),
+  theme: z.string().optional().default('General'),
+  asset_class: z.enum(['equity', 'etf', 'options', 'crypto', 'forex', 'futures', 'macro']).default('equity'),
+  data_freshness: z.string().default('live'),
+  event_exposure: z.array(z.string()).default([])
+});
+
+export const PortfolioHeatSchema = z.object({
+  total_heat_dollars: z.number(),
+  heat_percent_current_equity: z.number(),
+  heat_percent_starting_equity: z.number(),
+  remaining_heat_budget: z.number(),
+  heat_limit_percent: z.number().default(6.0),
+  soft_warning_percent: z.number().default(4.0),
+  hard_block_percent: z.number().default(6.0),
+  status: z.enum(['normal', 'soft_warning', 'hard_block']),
+  heat_by_sector: z.record(z.string(), z.number()),
+  heat_by_theme: z.record(z.string(), z.number()),
+  heat_by_asset_class: z.record(z.string(), z.number()),
+  heat_by_direction: z.object({ long: z.number(), short: z.number() }),
+  as_of: z.string(),
+  source: z.string().default('sentinel-x:risk-engine')
+});
+
+export const PortfolioSnapshotSchema = z.object({
+  starting_equity: z.number(),
+  current_equity: z.number(),
+  cash: z.number(),
+  gross_exposure: z.number(),
+  net_exposure: z.number(),
+  long_exposure: z.number(),
+  short_exposure: z.number(),
+  leverage: z.number().default(1.0),
+  open_positions: z.array(PositionRiskSchema),
+  pending_orders: z.array(z.any()).default([]),
+  unrealized_pnl: z.number(),
+  realized_pnl: z.number(),
+  daily_pnl: z.number(),
+  daily_pnl_percent: z.number(),
+  peak_equity: z.number(),
+  current_drawdown: z.number(),
+  current_drawdown_percent: z.number(),
+  max_drawdown_percent: z.number().default(12.0),
+  risk_used_today: z.number(),
+  remaining_risk_budget: z.number(),
+  as_of: z.string(),
+  source: z.string().default('sentinel-x:paper-ledger')
+});
+
+export const CorrelationMatrixSchema = z.object({
+  lookback_days: z.number().default(60),
+  frequency: z.enum(['daily', 'intraday']).default('daily'),
+  symbols: z.array(z.string()),
+  matrix: z.record(z.string(), z.record(z.string(), z.number().nullable())),
+  pairs: z.array(z.object({
+    pair: z.string(),
+    correlation: z.number(),
+    classification: z.enum(['very_high', 'high', 'moderate', 'low', 'negative']),
+    lookback: z.number()
+  })),
+  label: z.string().default('Estimated from historical returns; correlations can change quickly.'),
+  source: z.string().default('sentinel-x:correlation-engine'),
+  as_of: z.string()
+});
+
+export const CorrelatedClusterSchema = z.object({
+  cluster_id: z.string(),
+  name: z.string(),
+  factor: z.string(),
+  symbols: z.array(z.string()),
+  combined_heat: z.number(),
+  combined_heat_percent: z.number(),
+  combined_exposure: z.number(),
+  average_pairwise_correlation: z.number(),
+  dominant_direction: z.enum(['long', 'short', 'mixed']),
+  common_catalysts: z.array(z.string()).default([]),
+  stress_test_loss: z.number().nullable().default(null)
+});
+
+export const StressTestResultSchema = z.object({
+  scenario: z.string(),
+  as_of: z.string(),
+  portfolio_equity: z.number(),
+  estimated_portfolio_pnl: z.number(),
+  estimated_portfolio_pnl_percent: z.number(),
+  positions_affected: z.array(z.object({
+    symbol: z.string(),
+    direction: z.enum(['long', 'short']),
+    estimated_pnl: z.number(),
+    stop_breached: z.boolean(),
+    data_source: z.string()
+  })),
+  assumptions: z.array(z.string()),
+  limitations: z.array(z.string()),
+  sources: z.array(z.string())
+});
+
+export const RiskBudgetSchema = z.object({
+  daily_budget_percent: z.number(),
+  daily_budget_dollars: z.number(),
+  daily_loss_realized: z.number(),
+  daily_heat_open: z.number(),
+  daily_risk_used: z.number(),
+  daily_budget_remaining: z.number(),
+  weekly_budget_percent: z.number(),
+  weekly_budget_dollars: z.number(),
+  weekly_loss_realized: z.number(),
+  weekly_risk_used: z.number(),
+  weekly_budget_remaining: z.number(),
+  risk_state: z.enum(['GREEN', 'YELLOW', 'ORANGE', 'RED', 'BLACK']),
+  reason: z.string(),
+  as_of: z.string()
+});
+
+export const KillSwitchStateSchema = z.object({
+  active: z.boolean(),
+  activated_at: z.string().nullable(),
+  activated_by: z.enum(['user', 'system', 'none']),
+  reason: z.string().nullable(),
+  trigger_metric: z.string().nullable(),
+  trigger_value: z.number().nullable(),
+  limit: z.number().nullable(),
+  new_entries_blocked: z.boolean().default(true),
+  existing_stops_active: z.boolean().default(true),
+  existing_targets_active: z.boolean().default(true),
+  risk_reduction_proposed: z.boolean().default(false),
+  deactivation_requires: z.literal('explicit_user_confirmation').default('explicit_user_confirmation')
+});
+
+export const PretradePortfolioCheckSchema = z.object({
+  verdict: z.enum(['approve', 'modify', 'veto']),
+  portfolio_heat_before: z.number(),
+  portfolio_heat_after: z.number(),
+  heat_limit: z.number(),
+  daily_risk_used: z.number(),
+  daily_risk_limit: z.number(),
+  correlation_warning: z.string().nullable().optional(),
+  concentration_warning: z.string().nullable().optional(),
+  stress_note: z.string().nullable().optional(),
+  required_changes: z.array(z.string()).default([]),
+  reason: z.string(),
+  sources: z.array(z.string()),
+  as_of: z.string()
+});
+
+export const RiskReductionPlanSchema = z.object({
+  plan_id: z.string(),
+  as_of: z.string(),
+  target_reduction_percent: z.number(),
+  current_heat: z.number(),
+  projected_heat: z.number(),
+  risk_saved_dollars: z.number(),
+  actions: z.array(z.object({
+    action: z.enum(['reduce', 'close', 'tighten_stop', 'hedge', 'do_nothing']),
+    symbol: z.string(),
+    current_risk: z.number(),
+    proposed_risk: z.number(),
+    risk_saved: z.number(),
+    impact_on_thesis: z.string(),
+    tradeoff: z.string(),
+    required_sentinel_approval: z.boolean().default(true),
+    required_pilot_execution: z.boolean().default(true)
+  })),
+  requires_human_confirmation: z.boolean().default(true)
+});
+
+// Validation helper functions
+export function validatePositionRisk(data) {
+  const res = PositionRiskSchema.safeParse(data);
+  return res.success ? { valid: true, data: res.data } : { valid: false, errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`) };
+}
+
+export function validatePortfolioHeat(data) {
+  const res = PortfolioHeatSchema.safeParse(data);
+  return res.success ? { valid: true, data: res.data } : { valid: false, errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`) };
+}
+
+export function validatePortfolioSnapshot(data) {
+  const res = PortfolioSnapshotSchema.safeParse(data);
+  return res.success ? { valid: true, data: res.data } : { valid: false, errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`) };
+}
+
+export function validateCorrelationMatrix(data) {
+  const res = CorrelationMatrixSchema.safeParse(data);
+  return res.success ? { valid: true, data: res.data } : { valid: false, errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`) };
+}
+
+export function validateCorrelatedCluster(data) {
+  const res = CorrelatedClusterSchema.safeParse(data);
+  return res.success ? { valid: true, data: res.data } : { valid: false, errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`) };
+}
+
+export function validateStressTestResult(data) {
+  const res = StressTestResultSchema.safeParse(data);
+  return res.success ? { valid: true, data: res.data } : { valid: false, errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`) };
+}
+
+export function validateRiskBudget(data) {
+  const res = RiskBudgetSchema.safeParse(data);
+  return res.success ? { valid: true, data: res.data } : { valid: false, errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`) };
+}
+
+export function validateKillSwitchState(data) {
+  const res = KillSwitchStateSchema.safeParse(data);
+  return res.success ? { valid: true, data: res.data } : { valid: false, errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`) };
+}
+
+export function validatePretradePortfolioCheck(data) {
+  const res = PretradePortfolioCheckSchema.safeParse(data);
+  return res.success ? { valid: true, data: res.data } : { valid: false, errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`) };
+}
+
+export function validateRiskReductionPlan(data) {
+  const res = RiskReductionPlanSchema.safeParse(data);
+  return res.success ? { valid: true, data: res.data } : { valid: false, errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`) };
+}
+
 

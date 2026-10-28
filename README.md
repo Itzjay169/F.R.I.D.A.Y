@@ -23,6 +23,7 @@ F.R.I.D.A.Y. is a voice-driven AI trading research desk powered by a central orc
 12. **LEDGER (The Book)**: Journals all desk calls, tracks paper P&L, audits performance metrics, and detects execution errors.
 13. **RELAY (Alert & Routine Manager)**: The desk's watchtower. Monitors price thresholds, indicators, SEC filings, macro calendar dates, position risk, and data health. Executes scheduled timezone-aware market routines. Strictly prohibited from trading.
 14. **ARCHIVE (Research Memory, Playbooks & Reviews)**: The desk's local research librarian and memory vault. Indexes theses, trade reviews, setups, and playbooks via SQLite FTS5 and local embeddings. Calculates setup expectancy, tracks discipline scores, and enables zero-cloud privacy. Strictly prohibited from trading.
+15. **SENTINEL-X (Portfolio Risk Officer)**: Evaluates book-level heat, return correlations, sector/cluster concentrations, multi-scenario stress tests, daily/weekly risk budgets, and manages the emergency Kill Switch. Strictly prohibited from executing trades.
 
 ---
 
@@ -61,6 +62,34 @@ F.R.I.D.A.Y. is a voice-driven AI trading research desk powered by a central orc
   - Item deletion cascades immediately to FTS5 search records and vector embeddings.
 - **Export Engine**: Explicit user-controlled export across Markdown, JSON, and CSV (`exportArchive`).
 - **Cyber-HUD Archive Panel (`ArchiveManagerView.jsx`)**: Dedicated multi-tab interface for Research, Playbooks, Reviews, and Weekly Reviews with filters, search, and detail modal.
+
+---
+
+## 🛡️ SENTINEL-X: Portfolio Risk, Heat, Correlation & Kill Switch (Phase 7.5)
+- **Portfolio-Level Risk Officer**: Evaluates the whole paper portfolio rather than individual trades in isolation. Tracks total book heat, correlated exposure, sector/theme concentration, drawdown, and daily/weekly risk budgets (`agents/sentinel-x`).
+- **Mathematical Portfolio Heat Engine (`services/sentinel-x/portfolioRiskModel.js`)**:
+  - Expresses heat in dollars and as percentage of equity:
+    $$\text{Portfolio Heat} = \sum_{i=1}^n \text{Risk}_i = \sum_{i=1}^n |\text{Entry}_i - \text{Stop}_i| \times \text{Quantity}_i$$
+  - Configurable threshold limits: 6.0% max heat hard block, 4.0% soft warning, 3.0% max sector heat, 4.0% max cluster heat, 2.0% max single-symbol heat.
+- **Rolling Returns Correlation Matrix & Cluster Detection (`services/sentinel-x/correlationEngine.js`)**:
+  - Calculates rolling Pearson correlation from historical daily percentage returns ($R_t = \frac{P_t - P_{t-1}}{P_{t-1}}$), strictly avoiding raw price distortions.
+  - Detects correlated clusters across sectors, themes, and shared macro factors (AI hardware, rates duration, high-beta growth, crypto beta).
+  - Prominent statistical honesty disclaimer: *"Estimated from historical returns; correlations can change quickly."*
+- **Scenario-Based Stress Testing (`services/sentinel-x/stressTesting.js`)**:
+  - 18 Built-in scenarios (Market down 1%/2%/5%/10%, Tech down 5%, Semis down 5%, Dollar up 1%, Yields up 25bps, VIX spike 25%, Liquidity shock, Gap through stop, Correlation spike).
+  - Transparent assumptions, limitations, and `MODEL-ESTIMATED (NOT A PREDICTION)` disclosures.
+- **Risk Budget System & Multi-Tier States (`services/sentinel-x/riskBudget.js`)**:
+  - Daily risk budget (3.0% default) and weekly risk budget (8.0% default).
+  - Risk states: `GREEN` (Normal), `YELLOW` (Approaching soft limit), `ORANGE` (Budget nearly exhausted), `RED` (Limit breached; new entries blocked), `BLACK` (Kill Switch active).
+- **Emergency Portfolio Kill Switch (`services/sentinel-x/killSwitch.js`)**:
+  - Voice-activated (*"Activate the kill switch"*), UI toggle, or automated trigger on daily loss, max drawdown, or heat hard breach.
+  - Invariant safety: blocks all new entries while **preserving active protective stops and profit targets**.
+  - Deactivation requires explicit human confirmation and documented rationale for audit journaling.
+- **Pretrade Dual Risk Check (`services/sentinelReview.js`)**:
+  - Trade plans pass both Level 1 (SENTINEL trade-level) and Level 2 (SENTINEL-X portfolio-level) risk gates (`reviewTradePlanWithSentinelSuite`).
+- **Cyber-HUD Portfolio Risk Desk (`PortfolioRiskView.jsx`)**:
+  - Visual gauges for heat, daily budget, weekly budget, and drawdown.
+  - Real-time positions table with stop risk ($ and % equity), sector heat allocation bars, correlation matrix, scenario stress selector, and defensive planner.
 
 ---
 
@@ -185,6 +214,21 @@ npm run dev
 - [x] Strict privacy & security: zero cloud uploads by default, zero telemetry on private journals, no unsolicited LLM access to journal text, and immediate embedding cascade on item deletion
 - [x] Strict execution boundary: ARCHIVE cannot place, modify, approve, or cancel orders
 - [x] Full automated test coverage: **184/184 tests passing** across 17 test suites (unit, integration, contract, archive-search)
+
+## Phase 7.5 Pass/Fail Checklist (SENTINEL-X Portfolio Risk, Heat, Correlation & Kill Switch)
+- [x] Specialist agent **SENTINEL-X** in [`agents/sentinel-x`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/agents/sentinel-x) with cold, conservative risk posture and 13 supported portfolio intents
+- [x] Mathematical Portfolio Heat calculation ($\sum |\text{Entry} - \text{Stop}| \times \text{Qty}$) with dollar, equity %, soft warning (4%), and hard block (6%) thresholds
+- [x] Rolling returns Pearson correlation matrix (60d default) computed strictly from daily percentage returns ($R_t = \frac{P_t - P_{t-1}}{P_{t-1}}$)
+- [x] Correlated cluster detection identifying AI hardware, Big Tech, high-beta momentum, and crypto beta clusters
+- [x] Concentration checks enforcing single symbol ($\le 2\%$), sector ($\le 3\%$), and cluster ($\le 4\%$) heat boundaries
+- [x] Scenario stress testing engine with 18 built-in market/sector/volatility shocks, stop breach detection, and model honesty disclosures
+- [x] Risk budget system with daily (3%) and weekly (8%) allocations across 5 discrete risk states (`GREEN`, `YELLOW`, `ORANGE`, `RED`, `BLACK`)
+- [x] Portfolio Kill Switch with auto-triggers (daily loss, max drawdown, heat hard breach), stop/target preservation, and mandatory human confirmation with documented rationale for deactivation
+- [x] Dual-level pretrade check (`reviewTradePlanWithSentinelSuite`) validating individual trade R:R/stops and portfolio-level risk limits
+- [x] Defensive risk-reduction planner proposing actionable trims, stop adjustments, and closures without auto-executing
+- [x] Cyber-HUD Portfolio Risk Desk panel ([`PortfolioRiskView.jsx`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/app/src/components/PortfolioRiskView.jsx)) with real-time gauges, positions risk table, correlation clusters, stress selector, and kill switch controls
+- [x] Strict security invariant: SENTINEL-X cannot place, modify, approve, or cancel orders (`assertSentinelXCannotExecute`)
+- [x] Full automated test coverage: **225/225 tests passing** across 21 test suites (unit, integration, contract, performance)
 
 ---
 

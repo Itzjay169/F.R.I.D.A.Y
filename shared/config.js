@@ -166,5 +166,39 @@ export const DESK_CONFIG = {
     { time: '04:38:03', agent: 'ATLAS', color: '#38bdf8', message: 'FOMC decision Wed - 2pm ET' },
     { time: '04:38:09', agent: 'SCOUT', color: '#eab308', message: 're-armed - next sweep 05:00' },
     { time: '04:38:14', agent: 'ORACLE', color: '#a855f7', message: 'forecast run complete' }
-  ]
+  ],
+
+  // SENTINEL-X Portfolio Risk Configuration (Phase 7.5, Section 12)
+  risk: {
+    max_risk_per_trade_percent: 1.0,
+    max_portfolio_heat_percent: 6.0,
+    soft_portfolio_heat_percent: 4.0,
+    max_symbol_heat_percent: 2.0,
+    max_sector_heat_percent: 3.0,
+    max_cluster_heat_percent: 4.0,
+    max_open_positions: 8,
+    daily_loss_limit_percent: 3.0,
+    weekly_loss_limit_percent: 8.0,
+    max_drawdown_percent: 12.0,
+    min_reward_risk: 1.5,
+    correlation_lookback_days: 60,
+    high_correlation_threshold: 0.7,
+    very_high_correlation_threshold: 0.8,
+    default_stress_scenarios: [
+      'market_down_2_percent',
+      'market_down_5_percent',
+      'tech_down_5_percent',
+      'crypto_down_10_percent',
+      'vix_spike_25_percent'
+    ],
+    kill_switch: {
+      enabled: true,
+      auto_activate_on_daily_loss: true,
+      auto_activate_on_max_drawdown: true,
+      auto_activate_on_heat_breach: true,
+      require_confirmation_to_deactivate: true
+    }
+  }
 };
+
+export const DEFAULT_RISK_CONFIG = DESK_CONFIG.risk;
