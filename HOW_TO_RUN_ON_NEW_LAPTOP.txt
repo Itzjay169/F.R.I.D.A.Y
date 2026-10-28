@@ -1,0 +1,48 @@
+========================================================================
+   F.R.I.D.A.Y. - THE TRADING DESK
+   HOW TO RUN ON A FRESH / NEW LAPTOP (ZERO SOFTWARE INSTALLED)
+========================================================================
+
+You do NOT need to install anything (no Node.js, no Git, no Python, no VSCode).
+Everything is 100% automated and portable.
+
+------------------------------------------------------------------------
+>>> 3-STEP QUICK START:
+------------------------------------------------------------------------
+
+STEP 1: Make sure the laptop is connected to Wi-Fi / Internet.
+
+STEP 2: Double-click:
+        --> START_FRIDAY.bat
+
+STEP 3: Sit back and watch!
+        The script will automatically:
+        * Download a portable self-contained Node.js runtime (no admin rights needed)
+        * Prepare all trading models and local libraries
+        * Automatically launch your web browser to http://localhost:5173/
+
+------------------------------------------------------------------------
+>>> FREQUENTLY ASKED QUESTIONS:
+------------------------------------------------------------------------
+
+Q: Windows shows a blue popup: "Windows protected your PC"?
+A: Click "More info" and then click "Run anyway". 
+   (Windows shows this for any newly copied .bat script).
+
+Q: Does this make changes to my Windows settings or registry?
+A: NO. Everything stays inside this folder (.runtime/node). 
+   When you delete or move this folder, your laptop remains completely clean.
+
+Q: How do I stop F.R.I.D.A.Y. when I am done?
+A: Just close your web browser and close the black terminal window.
+
+Q: Can I run it from a USB Pen Drive or External SSD?
+A: YES. You can run it directly from a USB drive or copy this folder 
+   to your Desktop/Documents and run it.
+
+Q: What if I have NO internet connection at all?
+A: If the laptop is completely offline, double-click:
+   --> START_STANDALONE.bat
+   (Uses Windows built-in PowerShell server to run the offline interface).
+
+========================================================================

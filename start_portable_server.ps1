@@ -12,9 +12,10 @@ Write-Host " Zero-Software Environment Detected: Running Native Host  " -Foregro
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 if (-not (Test-Path $RootFolder)) {
-    Write-Host "[ERROR] dist folder not found at: $RootFolder" -ForegroundColor Red
-    Write-Host "Please ensure the dist folder is included." -ForegroundColor Yellow
-    exit 1
+    Write-Host "[NOTICE] Pre-built distribution folder not found." -ForegroundColor Yellow
+    Write-Host "[FORWARD] Automatically configuring environment and building..." -ForegroundColor Cyan
+    & "$PSScriptRoot\setup_portable_runtime.ps1"
+    exit 0
 }
 
 $listener = New-Object System.Net.HttpListener
