@@ -1,0 +1,111 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-10-28T09:59:00Z",
+  "primaryTarget": "tradingview_mcp",
+  "activeProvider": "tradingview_advanced_charts_embedded",
+  "fallbackPriority": [
+    "tradingview_desktop_mcp",
+    "tradingview_advanced_charts_embedded",
+    "lightweight_limited_mode"
+  ],
+  "capabilities": {
+    "symbol_control": {
+      "supported": true,
+      "provider": "embedded_advanced_charts",
+      "description": "Dynamic symbol switching across all global equities, ETFs, crypto, and commodities.",
+      "status": "ONLINE"
+    },
+    "timeframe_control": {
+      "supported": true,
+      "provider": "embedded_advanced_charts",
+      "intervals": ["1", "5", "15", "30", "60", "240", "D", "W"],
+      "description": "Multi-timeframe resolution switching.",
+      "status": "ONLINE"
+    },
+    "chart_type_control": {
+      "supported": true,
+      "provider": "embedded_advanced_charts",
+      "styles": ["candles", "heikin_ashi", "bars", "line", "area", "hollow_candles"],
+      "description": "Switch chart styles dynamically.",
+      "status": "ONLINE"
+    },
+    "indicators": {
+      "supported": true,
+      "provider": "embedded_advanced_charts",
+      "presets": ["standard", "momentum", "trend", "clean"],
+      "supportedIndicators": ["VWAP", "EMA", "SMA", "RSI", "MACD", "ATR", "BollingerBands", "StochasticRSI", "Volume"],
+      "description": "Indicator library with automated preset application and interactive configuration.",
+      "status": "ONLINE"
+    },
+    "drawings": {
+      "supported": true,
+      "provider": "friday_overlay_engine_and_tv_toolbar",
+      "tools": [
+        "horizontal_line", "trendline", "ray", "rectangle_zone",
+        "fibonacci_retracement", "support_resistance", "liquidity_levels",
+        "text_label", "risk_reward_bracket"
+      ],
+      "description": "Agent structure overlays (Athena, Chartist, Sentinel, Pilot) plus full interactive TradingView drawing toolbar.",
+      "status": "ONLINE"
+    },
+    "layouts_panes": {
+      "supported": true,
+      "provider": "friday_workspace_manager",
+      "description": "Layout saving/loading and multi-view state.",
+      "status": "ONLINE"
+    },
+    "replay": {
+      "supported": false,
+      "provider": "simulated_historical_stepper",
+      "limitation": "Official TradingView embed does not expose live Bar Replay without TradingView Desktop subscription. Simulated bar stepper available.",
+      "description": "Simulated bar replay stepper.",
+      "status": "SIMULATED_FALLBACK"
+    },
+    "alerts": {
+      "supported": true,
+      "provider": "sentinel_price_alert_engine",
+      "description": "Sentinel real-time price cross alerts and webhook notification.",
+      "status": "ONLINE"
+    },
+    "pine_script": {
+      "supported": false,
+      "provider": "pine_script_generator",
+      "limitation": "Honest disclosure: TradingView official MCP & embed do not support Pine compilation or script injection without TradingView Desktop or user account.",
+      "description": "Generates Pine Script v5 code for user to copy into TradingView Desktop.",
+      "status": "UNSUPPORTED_DISCLOSED"
+    },
+    "screenshots": {
+      "supported": true,
+      "provider": "tradingview_widget_save_image",
+      "description": "Chart snapshot and state export.",
+      "status": "ONLINE"
+    },
+    "paper_order_mirroring": {
+      "supported": true,
+      "provider": "friday_paper_engine",
+      "mirrorModeAvailable": true,
+      "default": "OFF",
+      "warning": "F.R.I.D.A.Y. local paper engine is the strict source of truth for execution, stops, and P&L. TradingView charts are visualization only.",
+      "description": "Visualizes paper orders, entry, stop, and take-profit overlays on the chart.",
+      "status": "ONLINE"
+    }
+  },
+  "mcpAudit": {
+    "officialTradingViewMcp": {
+      "detected": false,
+      "toolsReported": [
+        "get_symbol_quote", "search_symbols", "get_screener_data",
+        "list_watchlists", "create_price_alert"
+      ],
+      "omissions": [
+        "chart_drawings", "pine_script_execution", "chart_screenshots",
+        "options_chains", "strategy_backtesting"
+      ]
+    },
+    "tradingViewDesktopMcp": {
+      "detected": false,
+      "targetUrl": "http://localhost:8080",
+      "status": "OFFLINE_FALLBACK_ACTIVE"
+    }
+  }
+}
