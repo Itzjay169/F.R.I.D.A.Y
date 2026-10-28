@@ -1,6 +1,9 @@
 import dotenv from 'dotenv';
 import { buildTradePlan } from '../agents/compass/compassAgent.js';
 import { createWorkflow } from './workflow/workflowEngine.js';
+import { parseNaturalLanguageAlert, RelayAgent } from '../agents/relay/relayAgent.js';
+import { listAlerts, pauseAlerts, resumeAlerts, deleteAlert } from './alerts/alertPersistence.js';
+import { executeRoutineWithOverlapProtection } from './alerts/routineScheduler.js';
 dotenv.config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyCxft1Ou8eg2ejDI7UE5s0rdX4L_MYAJzE';
@@ -77,8 +80,129 @@ Return STRICT JSON ONLY:
   const isMacroIntent = normCmd.includes('macro') || normCmd.includes('fed') || normCmd.includes('rate');
   const isNewsIntent = normCmd.includes('news') || normCmd.includes('breaking');
   const isPlanIntent = normCmd.includes('plan') || normCmd.includes('workflow') || normCmd.includes('setup') || normCmd.includes('strategy');
-  const isPnlIntent = normCmd.includes('p&l') || normCmd.includes('pnl') || normCmd.includes('profit') || normCmd.includes('portfolio') || normCmd.includes('positions') || normCmd.includes('equity');
-  const isChartIntent = normCmd.includes('chart') || normCmd.includes('candle') || normCmd.includes('technical');
+  const isAlertIntent = normCmd.includes('alert') || normCmd.includes('remind') || normCmd.includes('warn');
+  const isRoutineIntent = normCmd.includes('briefing') || normCmd.includes('routine') || normCmd.includes('post-market review') || normCmd.includes('checklist') || normCmd.includes('review my journal');
+
+  if (isAlertIntent) {
+    const relay = new RelayAgent();
+
+    // 1. Show all active alerts
+    if (normCmd.includes('show') || normCmd.includes('list')) {
+      const active = listAlerts({ status: 'active' });
+      return {
+        spokenText: `You have ${active.length} active alerts armed on the desk.`,
+        primaryAgent: 'RELAY',
+        signals: [
+          { agent: 'RELAY', message: `Active alerts (${active.length}): ${active.map(a => a.name).join(', ') || 'None'}` }
+        ],
+        alerts: active,
+        sources: ['relay:sqlite-alerts']
+      };
+    }
+
+    // 2. Pause alerts
+    if (normCmd.includes('pause')) {
+      pauseAlerts();
+      return {
+        spokenText: 'All desk alerts have been paused.',
+        primaryAgent: 'RELAY',
+        signals: [
+          { agent: 'RELAY', message: 'All alert monitors paused by trader request.' }
+        ],
+        sources: ['relay:sqlite-alerts']
+      };
+    }
+
+    // 3. Resume alerts
+    if (normCmd.includes('resume')) {
+      resumeAlerts();
+      return {
+        spokenText: 'All desk alerts have been resumed.',
+        primaryAgent: 'RELAY',
+        signals: [
+          { agent: 'RELAY', message: 'All alert monitors resumed.' }
+        ],
+        sources: ['relay:sqlite-alerts']
+      };
+    }
+
+    // 4. Delete alert
+    if (normCmd.includes('delete') || normCmd.includes('remove') || normCmd.includes('cancel')) {
+      const active = listAlerts();
+      const match = active.find(a => symbol && a.symbol === symbol);
+      if (match) {
+        deleteAlert(match.alert_id);
+        return {
+          spokenText: `Deleted ${match.name}.`,
+          primaryAgent: 'RELAY',
+          signals: [
+            { agent: 'RELAY', message: `Deleted alert ${match.name} (${match.alert_id}).` }
+          ],
+          sources: ['relay:sqlite-alerts']
+        };
+      }
+    }
+
+    // 5. Create new alert
+    const parsed = parseNaturalLanguageAlert(command);
+    if (parsed.ambiguous) {
+      return {
+        spokenText: parsed.clarifying_question,
+        primaryAgent: 'RELAY',
+        signals: [
+          { agent: 'RELAY', message: `Clarification needed: ${parsed.clarifying_question}` }
+        ],
+        sources: ['relay:parser']
+      };
+    }
+
+    const created = relay.createAlert(parsed);
+    return {
+      spokenText: `Alert created: ${created.name}. Watchtower is armed.`,
+      primaryAgent: 'RELAY',
+      signals: [
+        { agent: 'RELAY', message: `Alert armed: ${created.name} (${created.condition.operator} ${created.condition.right || ''}).` },
+        { agent: 'SENTINEL', message: created.actions.request_sentinel_review ? 'Sentinel notified of risk condition.' : 'Risk monitoring active.' }
+      ],
+      alert: created,
+      sources: ['relay:sqlite-alerts']
+    };
+  }
+
+  if (isRoutineIntent) {
+    if (normCmd.includes('pre-market') || normCmd.includes('briefing')) {
+      const res = await executeRoutineWithOverlapProtection('routine-pre-market-briefing');
+      return {
+        spokenText: `Pre-market briefing routine dispatched. ${res.executed ? 'Generating briefing deck.' : 'Routine already active.'}`,
+        primaryAgent: 'RELAY',
+        signals: [
+          { agent: 'RELAY', message: `Pre-market briefing dispatched.` }
+        ],
+        sources: ['relay:routine-scheduler']
+      };
+    }
+    if (normCmd.includes('post-market')) {
+      const res = await executeRoutineWithOverlapProtection('routine-post-market-review');
+      return {
+        spokenText: `Post-market review routine initiated. Reconciling daily P&L and journal prompts.`,
+        primaryAgent: 'RELAY',
+        signals: [
+          { agent: 'RELAY', message: `Post-market review dispatched.` }
+        ],
+        sources: ['relay:routine-scheduler']
+      };
+    }
+    if (normCmd.includes('journal')) {
+      return {
+        spokenText: `Weekly journal review reminder armed for Friday at 5 PM.`,
+        primaryAgent: 'RELAY',
+        signals: [
+          { agent: 'RELAY', message: `Weekly journal review scheduled for Friday 5 PM.` }
+        ],
+        sources: ['relay:routine-scheduler']
+      };
+    }
+  }
 
   if (isPlanIntent) {
     const planResult = buildTradePlan(command, quote);

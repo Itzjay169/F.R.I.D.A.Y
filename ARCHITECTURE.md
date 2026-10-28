@@ -47,6 +47,7 @@ graph TD
 | **SENTINEL** | Risk checks, position limits, drawdown | Draft trade plan, portfolio state | `SentinelVerdictSchema` (Approve/Modify/Veto) | **Veto Authority** |
 | **PILOT** | Paper order matching & execution | Approved plan + Signed HMAC token | Paper execution tickets | **Paper Only (Phase 3)** |
 | **LEDGER** | Trade journaling, paper P&L, audits | Paper execution stream | P&L records, performance metrics | **Audit Only** |
+| **RELAY** | Alert & routine manager, desk watchtower | Quotes, indicators, filings, calendar, positions | `AlertSchema`, `RoutineSchema`, `AlertTriggerEventSchema` | **Strictly Prohibited** |
 
 ---
 
@@ -192,5 +193,51 @@ All cross-agent communication is validated using Zod schemas defined in `shared/
 - **`TradePlanSchema`**: Enforces required fields (`id`, `symbol`, `direction`, `timeframe`, `thesis`, `entry`, `stop`, `targets`, `positionSize`, `invalidation`, `confidence`, `sources`).
 - **`SentinelVerdictSchema`**: Enforces strict verdict types (`verdict`, `score`, `checks`, `violations`, `timestamp`).
 - **`WorkflowStateSchema`**: Enforces complete lifecycle state integrity.
+- **`AlertSchema` & `RoutineSchema`**: Validates alert configurations, routine schedules, and triggered event envelopes.
 
 Missing or unconfirmed data points are represented explicitly as `"—"` or `null` with attached disclosure chips, preventing hallucinated prices or phantom levels from reaching risk review.
+
+---
+
+## 6. RELAY Alert Watchtower & Routine Architecture (Phase 5.5)
+
+```mermaid
+graph TD
+    Feeds[Market Feeds · Quotes · News · Filings · Positions] --> Evaluator[Alert Evaluation Engine]
+    Evaluator --> SQLiteAlerts[(friday_alerts.db)]
+    
+    subgraph Multi-Tier Notifications
+        Evaluator --> SignalLog[Signal Log · Streaming Audit]
+        Evaluator --> HUDToast[HUD Toast · Non-Blocking]
+        Evaluator --> AudioChime[Web Audio Chime · Synthesized]
+        Evaluator --> DesktopNotif[Desktop Notification · Opt-in]
+    end
+
+    Scheduler[Routine Scheduler · node-cron] -->|America/New_York| Workflows[Workflow Dispatcher]
+    Scheduler --> OverlapGuard{Overlap Prevention}
+    OverlapGuard -->|Active Run Exists| Skip[Skip Concurrent Run]
+    OverlapGuard -->|Idle| Exec[Execute Scheduled Routine]
+```
+
+### 1. Alert Evaluation Engine (`services/alerts/evaluator.js`)
+- **Event-Driven & Multi-Source**: Evaluates alerts on every quote tick, news wire, SEC filing, calendar update, paper position update, and data-health state change.
+- **True Crossing Detection**: Requires historical state comparison ($prev \le threshold \land current > threshold$). Does not fire if price was already beyond threshold at creation unless explicitly flagged.
+- **Active Hours & Timezone**: Restricts firing to configured market sessions (e.g. `09:30 - 16:00 America/New_York`).
+- **Stale Quote Protection**: Automatically blocks price/indicator alerts when quote data is flagged as stale.
+- **Deduplication**: Enforces strict event signature tracking preventing redundant triggers on the same filing accession number or news story.
+
+### 2. Timezone-Aware Routine Scheduler (`services/alerts/routineScheduler.js`)
+- **Native CRON Execution**: Built on `node-cron` with explicit timezone binding to `America/New_York`.
+- **Overlap Prevention**: Maintains an in-memory execution registry (`runningRoutines`). If a routine is still executing from a previous tick, overlapping runs are gracefully skipped.
+- **Default Seed Routines**:
+  1. `Pre-market briefing`: Weekdays, 09:00 ET (`0 9 * * 1-5`)
+  2. `Market-open checklist`: Weekdays, 09:30 ET (`30 9 * * 1-5`)
+  3. `Midday risk check`: Weekdays, 13:00 ET (`0 13 * * 1-5`)
+  4. `Post-market review`: Weekdays, 16:15 ET (`15 16 * * 1-5`)
+  5. `Weekly journal review`: Friday, 17:00 ET (`0 17 * * 5`)
+
+### 3. SQLite Persistence Layer (`services/alerts/alertPersistence.js`)
+- `alerts`: Stores alert definitions, conditions, triggers, actions, and current status (`active`, `paused`, `triggered`, `expired`).
+- `routines`: Stores routine schedules, cron expressions, workflow bindings, and execution timestamps.
+- `alert_events`: Tamper-evident append-only trigger history with severity ratings (`info`, `important`, `critical`).
+

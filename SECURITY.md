@@ -37,6 +37,7 @@ graph LR
         CAPITOL[CAPITOL]
         SCOUT[SCOUT]
         COMPASS[COMPASS]
+        RELAY[RELAY]
     end
 
     subgraph Risk Gate
@@ -49,12 +50,13 @@ graph LR
     end
 
     COMPASS -->|Draft TradePlan| SENTINEL
+    RELAY -->|Request Risk Audit| SENTINEL
     SENTINEL -->|Review: Approve / Veto| USER
     USER -->|Explicit Confirmation| PILOT
 ```
 
 ### Analysis Agent Veto
-The analysis agents (`COMPASS`, `ATHENA`, `CHARTIST`, `ORACLE`, `ATLAS`, `SCOUT`, `CAPITOL`, `NEWSROOM`):
+The analysis and watchtower agents (`COMPASS`, `ATHENA`, `CHARTIST`, `ORACLE`, `ATLAS`, `SCOUT`, `CAPITOL`, `NEWSROOM`, `RELAY`):
 - Have **zero** access to execution endpoints or order book functions.
 - Cannot place, cancel, or modify simulated orders.
 - Cannot sign or forge risk approval tokens.
@@ -65,6 +67,15 @@ The analysis agents (`COMPASS`, `ATHENA`, `CHARTIST`, `ORACLE`, `ATLAS`, `SCOUT`
 - It **never** contacts the paper execution engine.
 - It **never** generates execution tokens.
 - It always submits its draft output to `SENTINEL` for risk checking.
+
+### RELAY Security Invariant (Phase 5.5)
+`RELAY` is the desk's watchtower and routine manager. By hardcoded design:
+- It can alert and stream notifications to the Signal Log, HUD toasts, and desktop.
+- It can request an independent `SENTINEL` risk audit or trigger a read-only research workflow.
+- It **never** places, modifies, fills, cancels, or approves any order or trade.
+- It **never** alters risk parameters or drawdown thresholds.
+- It cannot generate Sentinel cryptographic execution tokens or authorize PILOT.
+- Any attempt to invoke order placement or trade approval through RELAY immediately triggers an immutable `SECURITY VIOLATION` exception.
 
 ---
 

@@ -16,6 +16,8 @@ import JournalView from './components/JournalView.jsx';
 import ChartView from './components/ChartView.jsx';
 import HealthModal from './components/HealthModal.jsx';
 import WorkflowView from './components/WorkflowView.jsx';
+import AlertManagerView from './components/AlertManagerView.jsx';
+import AlertToast from './components/AlertToast.jsx';
 
 import {
   fetchLiveQuotes,
@@ -43,6 +45,7 @@ export default function App() {
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [chartSymbol, setChartSymbol] = useState('SPY');
   const [showHealthModal, setShowHealthModal] = useState(false);
+  const [activeAlertToast, setActiveAlertToast] = useState(null);
 
   // Real-time breaking news states
   const [latestBreakingNews, setLatestBreakingNews] = useState(null);
@@ -429,6 +432,21 @@ export default function App() {
         setActiveTab('workflows');
       }
 
+      // If an alert or routine was created/queried, switch to alerts view and toast
+      if (data.alert || data.alerts) {
+        setActiveTab('alerts');
+        if (data.alert) {
+          setActiveAlertToast({
+            alert_id: data.alert.alert_id,
+            alert_name: data.alert.name,
+            symbol: data.alert.symbol,
+            severity: 'info',
+            message: `Armed: ${data.alert.condition.left} ${data.alert.condition.operator} ${data.alert.condition.right ?? ''}`,
+            source: 'RELAY Watchtower'
+          });
+        }
+      }
+
       // Speak response out loud
       if (data.spokenText) {
         speakResponse(data.spokenText);
@@ -675,6 +693,30 @@ export default function App() {
           />
         </div>
       )}
+
+      {/* Alerts & Routines (RELAY Watchtower) Tab */}
+      {activeTab === 'alerts' && (
+        <div style={{ padding: '8px 0', height: '100%', overflow: 'hidden' }}>
+          <AlertManagerView
+            onSendToChart={(sym) => {
+              setChartSymbol(sym);
+              setActiveTab('chart');
+            }}
+            onNotify={(agent, message, color) => addSignal(agent, message, color)}
+            onSpeak={(text) => speakResponse(text)}
+          />
+        </div>
+      )}
+
+      {/* Non-blocking HUD Alert Toast Notification */}
+      <AlertToast
+        alertEvent={activeAlertToast}
+        onDismiss={() => setActiveAlertToast(null)}
+        onViewSymbol={(sym) => {
+          setChartSymbol(sym);
+          setActiveTab('chart');
+        }}
+      />
 
       {/* 3. Bottom Controls */}
       <CommandBar

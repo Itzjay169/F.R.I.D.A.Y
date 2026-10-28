@@ -21,6 +21,23 @@ F.R.I.D.A.Y. is a voice-driven AI trading research desk powered by a central orc
 10. **SENTINEL (Risk Officer)**: Evaluates trade risk, mandates stop-losses, checks daily drawdowns, and holds **VETO** power. Issues cryptographic approval tokens.
 11. **PILOT (Execution)**: Fills paper orders in SQLite only upon presentation of a valid Sentinel approval token.
 12. **LEDGER (The Book)**: Journals all desk calls, tracks paper P&L, audits performance metrics, and detects execution errors.
+13. **RELAY (Alert & Routine Manager)**: The desk's watchtower. Monitors price thresholds, indicators, SEC filings, macro calendar dates, position risk, and data health. Executes scheduled timezone-aware market routines. Strictly prohibited from trading.
+
+---
+
+## 🔔 RELAY Alert & Routine Manager (Phase 5.5)
+- **Natural Language Alert Engine**: Evaluates natural language commands into structured alerts:
+  - *"Alert me if NVDA breaks above 150."* (Price crosses above)
+  - *"Alert me if AAPL drops below 180."* (Price crosses below)
+  - *"Tell me when TSLA RSI goes above 70 on the daily."* (Indicator threshold)
+  - *"Alert me on any new 8-K from NVDA."* (EDGAR filing alert)
+  - *"Notify me 30 minutes before CPI."* (Macro calendar lead-time alert)
+  - *"Warn me if any open position loses more than 2%."* (Position-risk alert)
+- **Timezone-Aware Routine Scheduler**: Built on `node-cron` with explicit `America/New_York` market session alignment and strict execution overlap prevention.
+  - 5 Built-in Routines: Pre-market briefing (09:00 ET), Market-open checklist (09:30 ET), Midday risk check (13:00 ET), Post-market review (16:15 ET), Weekly journal review (Friday 17:00 ET).
+- **Multi-Tier Notifications**: Persistent Signal Log entries, non-blocking HUD toasts with auto-dismiss and 1-click symbol chart routing, optional Web Audio synthesized chime alerts, and opt-in OS desktop notifications (`Notification.permission`).
+- **SQLite Persistence**: Full local persistence across 3 relational tables (`alerts`, `routines`, `alert_events`).
+- **Security Boundary**: RELAY can alert and request Sentinel risk reviews, but is strictly prohibited from executing, modifying, or authorizing paper orders.
 
 ---
 
@@ -119,6 +136,18 @@ npm run dev
 - [x] Zero PILOT execution in Phase 2.5: strict pipeline termination prior to live or paper order submission
 - [x] 100% test pass rate: **85/85 tests passing** across 9 test suites
 - [x] Architectural & Security documentation: [`ARCHITECTURE.md`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/ARCHITECTURE.md) and [`SECURITY.md`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/SECURITY.md)
+
+## Phase 5.5 Pass/Fail Checklist (RELAY Alerts, Routines & Proactive Awareness)
+- [x] Specialist agent **RELAY** in [`agents/relay`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/agents/relay) with `AlertSchema` and `RoutineSchema` Zod validation
+- [x] Natural language alert parser supporting Price, Indicator, News, Filing, Calendar, Position-Risk, and Data-Health categories
+- [x] Alert evaluation engine ([`services/alerts/evaluator.js`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/services/alerts/evaluator.js)) with true threshold crossing, active hours (`America/New_York`), cooldown, deduplication, and stale quote protection
+- [x] Routine scheduler ([`services/alerts/routineScheduler.js`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/services/alerts/routineScheduler.js)) with `node-cron`, timezone support, and strict overlap prevention
+- [x] 5 Built-in market routines seeded in SQLite: Pre-market briefing, Market-open checklist, Midday risk check, Post-market review, and Weekly journal review
+- [x] SQLite persistence layer ([`services/alerts/alertPersistence.js`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/services/alerts/alertPersistence.js)) managing `alerts`, `routines`, and `alert_events`
+- [x] Multi-tier notifications: Signal Log streaming, non-blocking HUD toasts ([`AlertToast.jsx`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/app/src/components/AlertToast.jsx)), audio chimes, and opt-in OS desktop notifications
+- [x] Cyber-HUD Watchtower panel ([`AlertManagerView.jsx`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/app/src/components/AlertManagerView.jsx)) with tabs, filters, search, quick alert creator, and routine controls
+- [x] Strict security boundary: RELAY cannot execute trades, authorize orders, or bypass Sentinel/Pilot
+- [x] Full automated test coverage: **111/111 tests passing** across 13 test suites
 
 ---
 

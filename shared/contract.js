@@ -244,3 +244,134 @@ export function validateSentinelVerdict(data) {
   }
   return { valid: true, data: res.data };
 }
+
+// =============================================================================
+// PHASE 5.5: RELAY ALERTS & ROUTINES ZOD SCHEMAS
+// =============================================================================
+
+export const AlertConditionSchema = z.object({
+  operator: z.enum(['crosses_above', 'crosses_below', 'equals', 'percent_change', 'threshold', 'keyword_match', 'schedule']),
+  left: z.string(), // e.g. close, high, low, rsi, vwap, ema_9, ema_21, unrealized_pnl, portfolio_heat, form_type, etc.
+  right: z.union([z.number(), z.string()]).nullable(),
+  secondary: z.union([z.number(), z.string()]).nullable().optional(),
+  lookback: z.string().nullable().optional(),
+  timeframe: z.enum(['1m', '5m', '15m', '1h', '1d']).nullable().optional()
+});
+
+export const AlertTriggerSchema = z.object({
+  once: z.boolean(),
+  cooldown_minutes: z.number().default(30),
+  expires_at: z.string().nullable().optional(),
+  active_hours: z.object({
+    start: z.string(),
+    end: z.string(),
+    timezone: z.string()
+  }).optional(),
+  trigger_immediately_if_true: z.boolean().optional().default(false)
+});
+
+export const AlertActionsSchema = z.object({
+  signal_log: z.boolean().default(true),
+  hud_toast: z.boolean().default(true),
+  sound: z.boolean().default(false),
+  desktop_notification: z.boolean().default(false),
+  speak: z.boolean().default(false),
+  start_workflow: z.string().nullable().optional(),
+  request_sentinel_review: z.boolean().optional().default(false)
+});
+
+export const AlertSchema = z.object({
+  alert_id: z.string(),
+  user_id: z.string().default('local'),
+  name: z.string(),
+  type: z.enum(['price', 'indicator', 'news', 'filing', 'calendar', 'position_risk', 'data_health']),
+  symbol: z.string().nullable(),
+  condition: AlertConditionSchema,
+  trigger: AlertTriggerSchema,
+  actions: AlertActionsSchema,
+  status: z.enum(['active', 'paused', 'triggered', 'expired', 'cancelled', 'error']).default('active'),
+  last_evaluated_at: z.string().nullable().default(null),
+  last_triggered_at: z.string().nullable().default(null),
+  trigger_count: z.number().default(0),
+  created_at: z.string(),
+  updated_at: z.string(),
+  source: z.enum(['user', 'newsroom', 'sentinel', 'system']).default('user'),
+  notes: z.string().nullable().optional(),
+  initial_value: z.union([z.number(), z.string()]).nullable().optional()
+});
+
+export const RoutineScheduleSchema = z.object({
+  type: z.enum(['daily', 'weekdays', 'weekly', 'custom']),
+  time: z.string(), // e.g. "09:00"
+  timezone: z.string().default('America/New_York'),
+  cron: z.string(), // e.g. "0 9 * * 1-5"
+  market_session: z.enum(['pre_market', 'regular', 'post_market', 'any']).optional().default('any')
+});
+
+export const RoutineActionsSchema = z.object({
+  speak: z.boolean().default(true),
+  hud_panel: z.boolean().default(true),
+  signal_log: z.boolean().default(true),
+  desktop_notification: z.boolean().default(false)
+});
+
+export const RoutineSchema = z.object({
+  routine_id: z.string(),
+  name: z.string(),
+  schedule: RoutineScheduleSchema,
+  workflow: z.string(),
+  enabled: z.boolean().default(false),
+  last_run_at: z.string().nullable().default(null),
+  next_run_at: z.string().nullable().default(null),
+  actions: RoutineActionsSchema,
+  created_at: z.string(),
+  updated_at: z.string()
+});
+
+export const AlertTriggerEventSchema = z.object({
+  event: z.literal('alert.triggered'),
+  alert_id: z.string(),
+  alert_name: z.string(),
+  symbol: z.string().nullable(),
+  severity: z.enum(['info', 'important', 'critical']),
+  message: z.string(),
+  value: z.union([z.number(), z.string()]).nullable(),
+  threshold: z.union([z.number(), z.string()]).nullable(),
+  source: z.string(),
+  as_of: z.string(),
+  actions: AlertActionsSchema
+});
+
+export function validateAlert(data) {
+  const res = AlertSchema.safeParse(data);
+  if (!res.success) {
+    return {
+      valid: false,
+      errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`)
+    };
+  }
+  return { valid: true, data: res.data };
+}
+
+export function validateRoutine(data) {
+  const res = RoutineSchema.safeParse(data);
+  if (!res.success) {
+    return {
+      valid: false,
+      errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`)
+    };
+  }
+  return { valid: true, data: res.data };
+}
+
+export function validateAlertTriggerEvent(data) {
+  const res = AlertTriggerEventSchema.safeParse(data);
+  if (!res.success) {
+    return {
+      valid: false,
+      errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`)
+    };
+  }
+  return { valid: true, data: res.data };
+}
+

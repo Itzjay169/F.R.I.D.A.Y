@@ -2,6 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.5.0-relay-alerts] - 2026-10-28
+### Completed: Phase 5.5 – RELAY: Alerts, Routines, and Proactive Desk Awareness
+- **RELAY Specialist Agent (`agents/relay/relayAgent.js`, `agents/relay/index.js`)**:
+  - Acts as the desk's vigilant watchtower monitoring prices, indicators, breaking news, SEC filings, calendar events, position risk, and system health.
+  - Natural language alert parser converts trader prompts (e.g. *"Alert me if NVDA breaks above 150"*, *"Tell me when TSLA RSI goes above 70 on the daily"*, *"Alert me on any new 8-K from NVDA"*, *"Notify me 30 minutes before CPI"*, *"Warn me if any open position loses more than 2%"*) into structured, validated `AlertSchema` records.
+  - Ambiguity detection: Proactively asks concise clarifying questions when requirements are underspecified.
+  - Strict security invariants: Hardcoded checks preventing order execution, trade modification, trade authorization, token creation, or risk rule bypass.
+- **Alert Evaluation Engine (`services/alerts/evaluator.js`)**:
+  - Real-time condition evaluation across Price, Indicator, News, Filing, Calendar, Position-Risk, and Data-Health alerts.
+  - True crossing logic: Fires only on genuine threshold crossing ($prev \le threshold \land current > threshold$), preventing phantom triggers when price was already beyond threshold at creation unless explicitly configured.
+  - Timezone & active hours awareness: Restricts alerts to specified market sessions in `America/New_York`.
+  - Cooldown and one-shot lifecycle management: Automatically transitions one-shot alerts to `triggered` state while recurring alerts enforce per-alert cooldown windows.
+  - Stale quote protection: Immediately skips price/indicator alerts when incoming data is stale.
+  - Deduplication: In-memory cache preventing duplicate triggers on the same news story or filing accession number.
+- **Timezone-Aware Routine Scheduler (`services/alerts/routineScheduler.js`)**:
+  - `node-cron` scheduler with explicit `America/New_York` timezone support and overlap prevention.
+  - 5 Built-in routines seeded in SQLite: Pre-market briefing (09:00 ET), Market-open checklist (09:30 ET), Midday risk check (13:00 ET), Post-market review (16:15 ET), and Weekly journal review (Friday 17:00 ET).
+  - Lifecycle controls: schedule, stop, run now, and inspect running status.
+- **SQLite Persistence Layer (`services/alerts/alertPersistence.js`)**:
+  - Local database storage across 3 relational tables: `alerts`, `routines`, and `alert_events`.
+  - Complete CRUD operations for alerts and routines with audit trail history.
+- **Multi-Tier Notification Engine & HUD Components (`AlertManagerView.jsx`, `AlertToast.jsx`)**:
+  - Streaming Signal Log integration.
+  - Non-blocking HUD toast with severity-coded colors (info, important, critical), auto-dismiss timer, and 1-click symbol chart routing.
+  - Web Audio API synthesized chimes with global mute toggle.
+  - Opt-in OS desktop notifications respecting `Notification.permission`.
+  - Dedicated "ALERTS" desk tab with tabs (Active, Paused, Triggered, Expired), bulk controls, search, type filters, test evaluation runner, and quick alert creation modal.
+- **Automated Test Suite (100% Pass Rate)**:
+  - **111/111 tests passing** across 13 test suites:
+    - `tests/contract/alerts/alertContract.test.js` (5 tests)
+    - `tests/unit/relay/relay.test.js` (6 tests)
+    - `tests/integration/alerts/alerts.test.js` (13 tests)
+    - `tests/integration/routines/routines.test.js` (2 tests)
+    - `tests/workflowEngine.test.js` (20 tests)
+    - `tests/chartRouter.test.js` (9 tests)
+    - `tests/contract/trade-plan/tradePlanContract.test.js` (6 tests)
+    - `tests/unit/compass/compass.test.js` (6 tests)
+    - `tests/compass.test.js` (25 tests)
+    - `tests/integration/trade-planning/tradePlanning.test.js` (3 tests)
+    - `tests/unit/workflow/workflowEngine.test.js` (7 tests)
+    - `tests/config.test.js` (4 tests)
+    - `tests/contract.test.js` (5 tests)
+
 ## [2.5.0-compass-workflows] - 2026-10-28
 ### Completed: Phase 2.5 – COMPASS Trade Planner & Persistent Workflow Engine
 - **COMPASS Trade Planner Agent (`agents/compass/compassAgent.js`, `agents/compass/contract.js`)**:

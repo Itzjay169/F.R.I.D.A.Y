@@ -32,6 +32,24 @@ import {
   getWorkflowSummary,
   listWorkflows as listMasterWorkflows
 } from './master/workflow/workflowEngine.js';
+import {
+  saveAlert,
+  getAlert,
+  listAlerts,
+  updateAlert,
+  deleteAlert,
+  pauseAlerts,
+  resumeAlerts,
+  listRoutines,
+  updateRoutine,
+  saveRoutine,
+  getAlertEvents,
+  recordAlertEvent
+} from './services/alerts/alertPersistence.js';
+import { RelayAgent, parseNaturalLanguageAlert } from './agents/relay/relayAgent.js';
+import { executeRoutineWithOverlapProtection } from './services/alerts/routineScheduler.js';
+import { evaluateAlert } from './services/alerts/evaluator.js';
+
 
 export default defineConfig({
   plugins: [
@@ -340,6 +358,152 @@ export default defineConfig({
             const health = compassHealthCheck();
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify(health));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // 15. RELAY: Alerts Endpoints
+        server.middlewares.use('/api/alerts/action', async (req, res) => {
+          try {
+            if (req.method !== 'POST') {
+              res.statusCode = 405;
+              return res.end('Method not allowed');
+            }
+            const body = await parseJson(req);
+            const { action, alert_id, updates, alert_ids, event_data } = body;
+
+            if (action === 'pause') {
+              const alerts = pauseAlerts(alert_ids || (alert_id ? [alert_id] : null));
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ status: 'ok', alerts }));
+            }
+            if (action === 'resume') {
+              const alerts = resumeAlerts(alert_ids || (alert_id ? [alert_id] : null));
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ status: 'ok', alerts }));
+            }
+            if (action === 'delete') {
+              deleteAlert(alert_id);
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ status: 'ok', deleted: alert_id }));
+            }
+            if (action === 'update') {
+              const updated = updateAlert(alert_id, updates);
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ status: 'ok', alert: updated }));
+            }
+            if (action === 'evaluate') {
+              const activeAlerts = listAlerts({ status: 'active' });
+              const triggered = [];
+              for (const a of activeAlerts) {
+                const evalRes = evaluateAlert(a, event_data || {});
+                if (evalRes.triggered) {
+                  triggered.push(evalRes.event);
+                  recordAlertEvent(evalRes.event);
+                  saveAlert(a);
+                }
+              }
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ status: 'ok', triggeredCount: triggered.length, triggered }));
+            }
+
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: `Unknown action ${action}` }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        server.middlewares.use('/api/alerts/events', (req, res) => {
+          try {
+            const url = new URL(req.url, 'http://localhost');
+            const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+            const alertId = url.searchParams.get('alert_id') || undefined;
+            const events = getAlertEvents({ alertId, limit });
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ status: 'ok', events }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        server.middlewares.use('/api/alerts', async (req, res) => {
+          try {
+            if (req.method === 'GET') {
+              const url = new URL(req.url, 'http://localhost');
+              const status = url.searchParams.get('status') || undefined;
+              const symbol = url.searchParams.get('symbol') || undefined;
+              const type = url.searchParams.get('type') || undefined;
+              const alerts = listAlerts({ status, symbol, type });
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ status: 'ok', alerts }));
+            }
+            if (req.method === 'POST') {
+              const body = await parseJson(req);
+              const relay = new RelayAgent();
+              let alertData = body;
+              if (body.prompt) {
+                const parsed = parseNaturalLanguageAlert(body.prompt);
+                if (parsed.ambiguous) {
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ status: 'clarification_required', question: parsed.clarifying_question }));
+                }
+                alertData = { ...parsed, ...body };
+              }
+              const created = relay.createAlert(alertData);
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ status: 'ok', alert: created }));
+            }
+            res.statusCode = 405;
+            res.end('Method not allowed');
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // 16. RELAY: Routines Endpoints
+        server.middlewares.use('/api/routines/action', async (req, res) => {
+          try {
+            if (req.method !== 'POST') {
+              res.statusCode = 405;
+              return res.end('Method not allowed');
+            }
+            const body = await parseJson(req);
+            const { action, routine_id, updates } = body;
+
+            if (action === 'run') {
+              const runRes = await executeRoutineWithOverlapProtection(routine_id);
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ status: 'ok', result: runRes }));
+            }
+            if (action === 'toggle' || action === 'update') {
+              const updated = updateRoutine(routine_id, updates);
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ status: 'ok', routine: updated }));
+            }
+
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: `Unknown routine action ${action}` }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        server.middlewares.use('/api/routines', (req, res) => {
+          try {
+            if (req.method === 'GET') {
+              const routines = listRoutines();
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ status: 'ok', routines }));
+            }
+            res.statusCode = 405;
+            res.end('Method not allowed');
           } catch (err) {
             res.statusCode = 500;
             res.end(JSON.stringify({ error: err.message }));
