@@ -305,6 +305,8 @@ export async function sendContactMessage(payload = {}, clientIdentifier = 'local
   const resendApiKey = process.env.RESEND_API_KEY;
   const sendgridApiKey = process.env.SENDGRID_API_KEY;
   const genericApiKey = process.env.EMAIL_API_KEY;
+  const webFormApiKey = process.env.WEB_FORM_API_KEY || process.env.WEB3FORMS_ACCESS_KEY;
+  const webFormApiUrl = process.env.WEB_FORM_API_URL || process.env.FORMSPREE_URL || (webFormApiKey ? 'https://api.web3forms.com/submit' : null);
 
   // Check for test mock mode
   if (options.mockProvider || process.env.CONTACT_SERVICE_MOCK === 'true') {
@@ -448,10 +450,69 @@ export async function sendContactMessage(payload = {}, clientIdentifier = 'local
       }
     }
 
+    // Provider Option D: Web Form API (Web3Forms, Formspree, or custom form webhook)
+    if (webFormApiUrl) {
+      const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+      if (webFormApiKey && !webFormApiUrl.includes('web3forms.com')) {
+        headers['Authorization'] = `Bearer ${webFormApiKey}`;
+      }
+
+      const formPayload = {
+        name: fullName,
+        email: email,
+        replyto: email,
+        subject: `[VEXORA] ${category}: ${subject}`,
+        category,
+        message,
+        recipient: recipientEmail,
+        submissionId,
+        timestamp,
+        from_name: 'Vexora Technology Contact'
+      };
+
+      if (webFormApiKey) {
+        formPayload.access_key = webFormApiKey;
+      }
+
+      const res = await fetch(webFormApiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(formPayload)
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success !== false && data.ok !== false) {
+        contactRateLimiter.record(clientIdentifier);
+        recordOperationalLog({
+          submissionId,
+          timestamp,
+          status: 'delivered',
+          provider: 'web_form_api',
+          category,
+          clientIdentifier
+        });
+        return {
+          success: true,
+          messageId: data.id || submissionId,
+          message: 'Your message has been submitted successfully. Thank you for contacting Vexora Technology.'
+        };
+      }
+
+      console.error('[CONTACT SERVICE] Web Form API error response:', data);
+      return {
+        success: false,
+        error: data?.message || data?.error || 'Web form API rejected the submission. Please verify your API key or endpoint.'
+      };
+    }
+
     // No valid API key configured
     return {
       success: false,
-      error: 'Email delivery credentials are not configured in .env (RESEND_API_KEY, SENDGRID_API_KEY, or EMAIL_API_KEY).',
+      error: 'Email delivery credentials are not configured in .env (WEB_FORM_API_KEY, RESEND_API_KEY, SENDGRID_API_KEY, or EMAIL_API_KEY).',
       unconfigured: true
     };
   } catch (err) {

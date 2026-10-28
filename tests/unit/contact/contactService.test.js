@@ -165,6 +165,10 @@ describe('Email Delivery Dispatcher & Mock Delivery (Phase 3)', () => {
     delete process.env.RESEND_API_KEY;
     delete process.env.SENDGRID_API_KEY;
     delete process.env.EMAIL_API_KEY;
+    delete process.env.WEB_FORM_API_KEY;
+    delete process.env.WEB3FORMS_ACCESS_KEY;
+    delete process.env.WEB_FORM_API_URL;
+    delete process.env.FORMSPREE_URL;
 
     try {
       const payload = {
@@ -219,5 +223,42 @@ describe('Email Delivery Dispatcher & Mock Delivery (Phase 3)', () => {
     expect(stringified).not.toContain('re_');
     expect(stringified).not.toContain('sk_');
     expect(stringified).not.toContain('dbg5ou');
+  });
+
+  it('delivers via Web Form API (Web3Forms/Formspree) when configured', async () => {
+    const originalEnv = { ...process.env };
+    process.env.CONTACT_RECEIVER_EMAIL = 'magicianbusiness30@gmail.com';
+    process.env.WEB_FORM_API_KEY = 'test_access_key_123';
+    delete process.env.RESEND_API_KEY;
+    delete process.env.SENDGRID_API_KEY;
+    delete process.env.EMAIL_API_KEY;
+
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ success: true, message: 'Message submitted via Web3Forms' })
+    });
+
+    try {
+      const payload = {
+        fullName: 'Web Form Tester',
+        email: 'tester@example.com',
+        category: 'Business Inquiry',
+        subject: 'Testing Web Form API Pipeline',
+        message: 'Direct dispatch through web form endpoint.'
+      };
+
+      const res = await sendContactMessage(payload, 'web_form_client');
+      expect(res.success).toBe(true);
+      expect(res.message).toContain('submitted successfully');
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://api.web3forms.com/submit',
+        expect.objectContaining({
+          method: 'POST'
+        })
+      );
+    } finally {
+      fetchSpy.mockRestore();
+      process.env = originalEnv;
+    }
   });
 });
