@@ -2,6 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
+## [6.5.0-archive-memory] - 2026-10-28
+### Completed: Phase 6.5 – ARCHIVE: Research Memory, Playbooks, and Trade Reviews
+- **ARCHIVE Specialist Agent (`agents/archive/archiveAgent.js`, `agents/archive/index.js`)**:
+  - Acts as the desk's memory and research librarian, saving, indexing, retrieving, linking, and summarizing trader knowledge.
+  - Implements 14 natural language intents: `save_research`, `search_research`, `summarize_research`, `create_playbook`, `find_playbook`, `update_playbook`, `archive_trade`, `review_trade`, `find_similar_trades`, `find_trades_by_event`, `find_mistakes`, `generate_weekly_review`, `export_archive`, and `delete_archive_item`.
+  - Distinguishes clearly between facts, user opinions, model estimates, and post-trade interpretations with mandatory model-generated labeling.
+  - Hardcoded non-execution assertion (`assertArchiveCannotExecute`) preventing trade entry, modification, authorization, or cancellation.
+- **SQLite Database with WAL Mode (`services/archive/archivePersistence.js`)**:
+  - Full relational schema across 9 tables: `research_items`, `research_links`, `playbooks`, `playbook_trades`, `trade_reviews`, `archive_embeddings`, `archive_tags`, `archive_events`, `archive_exports`.
+  - SQLite WAL mode enabled for concurrent reads and durable writes.
+  - SQLite FTS5 full-text virtual table (`research_items_fts`) supporting BM25-ranked keyword queries across title, thesis, body, tags, symbol, setup, and regime.
+- **Hybrid Retrieval Engine (`services/archive/retrieval.js`)**:
+  - Combines exact symbol match, tag match, FTS5 keyword relevance, local vector cosine similarity, and recency decay.
+  - Generates transparent match explanations detailing why an item was retrieved.
+  - Includes specialized retrieval routines: `findSimilarTrades` (with optional cross-symbol learning), `findTradesByEvent` (macro calendar date windows), `findMistakes` (tagged recurring trading errors), and `getLinkedItems`.
+- **Automatic Archiving Engine (`services/archive/autoArchive.js`)**:
+  - Auto-archives completed trade-planning workflows, paper trade fills, trade closures, Sentinel vetoes with reasons, breaking news catalysts, and user notes.
+  - Auto-drafts pre-populated trade reviews upon paper position exit.
+- **Playbook Generation Engine (`services/archive/playbookEngine.js`)**:
+  - Automatically synthesizes repeatable playbooks from historical closed trades.
+  - Calculates mathematically verified performance: win rate, average R, profit factor, max drawdown, and data range.
+  - Extracts common entry rules, invalidation rules, stop placement, targets, and position sizing.
+  - Feeds historical expectancy to COMPASS during future trade planning without giving autonomous execution advice.
+- **Trade Review & Process Scoring Engine (`services/archive/reviewEngine.js`)**:
+  - Computes objective, transparent 10-point Process Score ($0–100$) separating trading discipline from outcome luck.
+  - Calculates Discipline Score ($0–100$) tracking execution adherence.
+  - Aggregates review statistics, mistake frequency distributions, emotional tags, and learning curve trends.
+- **Cyber-HUD Archive Manager Panel (`app/src/components/ArchiveManagerView.jsx`)**:
+  - Multi-tab HUD interface: Research, Playbooks, Trade Reviews, and Weekly Reviews.
+  - Multi-dimensional filters (Symbol, Kind, Setup, Timeframe, Outcome, Regime, Tags, Date Range).
+  - Detailed modal view with source chips, links to trades/workflows/news/filings, and "Use in Current Plan" action.
+  - Direct Export controls supporting Markdown, JSON, and CSV.
+- **Zero-Cloud Privacy Invariants**:
+  - Local-first persistence by default; no cloud upload or telemetry.
+  - No unsolicited LLM access to private journal entries.
+  - Cascading deletion across items, links, FTS5 rows, and embeddings.
+- **Automated Test Suite (100% Pass Rate)**:
+  - **184/184 tests passing** across 17 test suites:
+    - `tests/unit/archive/archive.test.js` (13 tests)
+    - `tests/integration/archive/archive-integration.test.js` (30 tests)
+    - `tests/contract/archive/archive-contract.test.js` (13 tests)
+    - `tests/integration/archive-search/archive-search.test.js` (17 tests)
+    - Plus all existing suites (trade planning, routines, alerts, compass, workflow engine, chart router, config).
+
 ## [5.5.0-relay-alerts] - 2026-10-28
 ### Completed: Phase 5.5 – RELAY: Alerts, Routines, and Proactive Desk Awareness
 - **RELAY Specialist Agent (`agents/relay/relayAgent.js`, `agents/relay/index.js`)**:

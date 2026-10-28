@@ -35,3 +35,11 @@ yarn-error.log*
 # Local cache
 .cache/
 .vite/
+
+# SQLite databases & WAL
+data/*.db
+data/*.db-shm
+data/*.db-wal
+*.db
+*.db-shm
+*.db-wal

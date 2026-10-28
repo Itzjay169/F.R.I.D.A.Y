@@ -49,6 +49,19 @@ import {
 import { RelayAgent, parseNaturalLanguageAlert } from './agents/relay/relayAgent.js';
 import { executeRoutineWithOverlapProtection } from './services/alerts/routineScheduler.js';
 import { evaluateAlert } from './services/alerts/evaluator.js';
+import { ArchiveAgent, archiveHealthCheck, parseArchiveIntent } from './agents/archive/archiveAgent.js';
+import {
+  saveResearchItem,
+  getResearchItem,
+  listResearchItems,
+  deleteResearchItem,
+  getPlaybook,
+  listPlaybooks as listArchivePlaybooks,
+  getTradeReview as getArchiveReview,
+  listTradeReviews as listArchiveReviews
+} from './services/archive/archivePersistence.js';
+import { hybridSearch } from './services/archive/retrieval.js';
+import { getReviewStats } from './services/archive/reviewEngine.js';
 
 
 export default defineConfig({
@@ -509,7 +522,146 @@ export default defineConfig({
             res.end(JSON.stringify({ error: err.message }));
           }
         });
+
+        // ═══════════════════════════════════════════════════════════
+        // 17. ARCHIVE: Research Library, Playbooks, Trade Reviews
+        // ═══════════════════════════════════════════════════════════
+
+        // ARCHIVE Health
+        server.middlewares.use('/api/archive/health', (req, res) => {
+          try {
+            const health = archiveHealthCheck();
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(health));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // ARCHIVE Reviews Stats
+        server.middlewares.use('/api/archive/reviews/stats', (req, res) => {
+          try {
+            const url = new URL(req.url, 'http://localhost');
+            const symbol = url.searchParams.get('symbol') || undefined;
+            const stats = getReviewStats({ symbol });
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(stats));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // ARCHIVE Reviews
+        server.middlewares.use('/api/archive/reviews', (req, res) => {
+          try {
+            const url = new URL(req.url, 'http://localhost');
+            const symbol = url.searchParams.get('symbol') || undefined;
+            const outcome = url.searchParams.get('outcome') || undefined;
+            const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+            const reviews = listArchiveReviews({ symbol, outcome, limit });
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ status: 'ok', reviews }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // ARCHIVE Playbooks
+        server.middlewares.use('/api/archive/playbooks', (req, res) => {
+          try {
+            const url = new URL(req.url, 'http://localhost');
+            const id = url.searchParams.get('id');
+            if (id) {
+              const pb = getPlaybook(id);
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ status: pb ? 'ok' : 'not_found', playbook: pb }));
+            }
+            const playbooks = listArchivePlaybooks();
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ status: 'ok', playbooks }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // ARCHIVE Search (hybrid FTS5 + semantic)
+        server.middlewares.use('/api/archive/search', (req, res) => {
+          try {
+            const url = new URL(req.url, 'http://localhost');
+            const q = url.searchParams.get('q') || '';
+            const symbol = url.searchParams.get('symbol') || undefined;
+            const kind = url.searchParams.get('kind') || undefined;
+            const limit = parseInt(url.searchParams.get('limit') || '30', 10);
+
+            if (!q) {
+              const items = listResearchItems({ symbol, kind, limit });
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ status: 'ok', items, total: items.length, method: 'list' }));
+            }
+
+            const results = hybridSearch(q, { limit, symbol, kind });
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ status: 'ok', ...results }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // ARCHIVE Actions (delete, save, command)
+        server.middlewares.use('/api/archive/action', async (req, res) => {
+          if (req.method !== 'POST') {
+            res.statusCode = 405;
+            return res.end('Method not allowed');
+          }
+          try {
+            const body = await parseJson(req);
+            const { action, item_id, command, context } = body;
+
+            if (action === 'delete' && item_id) {
+              deleteResearchItem(item_id);
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ status: 'ok', deleted: item_id }));
+            }
+
+            if (action === 'command' && command) {
+              const archive = new ArchiveAgent();
+              const result = await archive.handleCommand(command, context || {});
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify(result));
+            }
+
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: `Unknown archive action: ${action}` }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // ARCHIVE Command (natural language dispatch)
+        server.middlewares.use('/api/archive/command', async (req, res) => {
+          if (req.method !== 'POST') {
+            res.statusCode = 405;
+            return res.end('Method not allowed');
+          }
+          try {
+            const body = await parseJson(req);
+            const archive = new ArchiveAgent();
+            const result = await archive.handleCommand(body.command || '', body.context || {});
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(result));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        });
       }
+
     }
   ],
   base: './',

@@ -69,7 +69,7 @@ export default function CommandBar({
 
         {/* View Switchers */}
         <div style={{ display: 'flex', gap: '4px', borderLeft: '1px solid var(--border-cyan)', paddingLeft: '8px' }}>
-          {['hud', 'chart', 'workflows', 'alerts', 'portfolio', 'news', 'journal'].map((tab) => (
+          {['hud', 'chart', 'workflows', 'alerts', 'archive', 'portfolio', 'news', 'journal'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}

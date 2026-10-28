@@ -375,3 +375,131 @@ export function validateAlertTriggerEvent(data) {
   return { valid: true, data: res.data };
 }
 
+// =============================================================================
+// PHASE 6.5: ARCHIVE KNOWLEDGE, PLAYBOOKS, AND TRADE REVIEWS ZOD SCHEMAS
+// =============================================================================
+
+export const ResearchSourceRefSchema = z.object({
+  source: z.string(),
+  ref: z.string(),
+  retrieved_at: z.string()
+});
+
+export const ResearchItemSchema = z.object({
+  item_id: z.string(),
+  kind: z.enum([
+    'thesis', 'note', 'chart_snapshot', 'news_context', 'filing_context',
+    'trade_plan', 'trade_review', 'playbook', 'daily_review', 'weekly_review'
+  ]),
+  title: z.string(),
+  symbol: z.string().nullable(),
+  symbols: z.array(z.string()).default([]),
+  asset_class: z.enum(['equity', 'etf', 'options', 'crypto', 'forex', 'futures', 'macro']).default('equity'),
+  timeframe: z.enum(['scalp', 'intraday', 'swing', 'position', 'any']).default('swing'),
+  market_regime: z.string().nullable().optional(),
+  setup: z.enum(['breakout', 'pullback', 'mean_reversion', 'earnings', 'macro', 'custom']).nullable().optional(),
+  thesis: z.string().default(''),
+  body: z.string().default(''),
+  tags: z.array(z.string()).default([]),
+  source_refs: z.array(ResearchSourceRefSchema).default([]),
+  linked_trade_ids: z.array(z.string()).default([]),
+  linked_workflow_ids: z.array(z.string()).default([]),
+  linked_news_ids: z.array(z.string()).default([]),
+  linked_filing_ids: z.array(z.string()).default([]),
+  confidence: z.number().min(0).max(1).default(1),
+  user_authored: z.boolean().default(true),
+  model_generated: z.boolean().default(false),
+  created_at: z.string(),
+  updated_at: z.string(),
+  archived_at: z.string().nullable().optional()
+});
+
+export const PlaybookPerformanceSummarySchema = z.object({
+  trade_count: z.number().default(0),
+  win_rate: z.number().default(0),
+  average_r: z.number().default(0),
+  profit_factor: z.number().default(0),
+  max_drawdown: z.number().default(0),
+  calculated_at: z.string(),
+  data_range: z.object({
+    from: z.string(),
+    to: z.string()
+  })
+});
+
+export const PlaybookSchema = z.object({
+  playbook_id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  market_regime: z.string().default('all'),
+  symbols: z.array(z.string()).default([]),
+  timeframes: z.array(z.string()).default([]),
+  entry_rules: z.array(z.string()).default([]),
+  invalidation_rules: z.array(z.string()).default([]),
+  stop_rules: z.array(z.string()).default([]),
+  target_rules: z.array(z.string()).default([]),
+  position_sizing_rules: z.array(z.string()).default([]),
+  event_filters: z.array(z.string()).default([]),
+  required_context: z.array(z.string()).default([]),
+  example_trade_ids: z.array(z.string()).default([]),
+  performance_summary: PlaybookPerformanceSummarySchema,
+  created_at: z.string(),
+  updated_at: z.string()
+});
+
+export const TradeReviewSchema = z.object({
+  review_id: z.string(),
+  trade_id: z.string(),
+  symbol: z.string(),
+  outcome: z.enum(['win', 'loss', 'scratch', 'open']).default('open'),
+  result_r: z.number().nullable().optional(),
+  process_score: z.number().min(0).max(100).default(100),
+  discipline_score: z.number().min(0).max(100).default(100),
+  what_went_right: z.array(z.string()).default([]),
+  what_went_wrong: z.array(z.string()).default([]),
+  mistakes: z.array(z.string()).default([]),
+  lessons: z.array(z.string()).default([]),
+  market_context: z.string().default(''),
+  thesis_at_entry: z.string().default(''),
+  thesis_validated: z.boolean().nullable().optional(),
+  followed_plan: z.boolean().nullable().optional(),
+  emotional_tags: z.array(z.string()).default([]),
+  user_notes: z.string().default(''),
+  model_notes: z.string().default(''),
+  created_at: z.string()
+});
+
+export function validateResearchItem(data) {
+  const res = ResearchItemSchema.safeParse(data);
+  if (!res.success) {
+    return {
+      valid: false,
+      errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`)
+    };
+  }
+  return { valid: true, data: res.data };
+}
+
+export function validatePlaybook(data) {
+  const res = PlaybookSchema.safeParse(data);
+  if (!res.success) {
+    return {
+      valid: false,
+      errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`)
+    };
+  }
+  return { valid: true, data: res.data };
+}
+
+export function validateTradeReview(data) {
+  const res = TradeReviewSchema.safeParse(data);
+  if (!res.success) {
+    return {
+      valid: false,
+      errors: (res.error.issues || []).map(e => `${e.path.join('.')}: ${e.message}`)
+    };
+  }
+  return { valid: true, data: res.data };
+}
+
+

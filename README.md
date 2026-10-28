@@ -22,6 +22,7 @@ F.R.I.D.A.Y. is a voice-driven AI trading research desk powered by a central orc
 11. **PILOT (Execution)**: Fills paper orders in SQLite only upon presentation of a valid Sentinel approval token.
 12. **LEDGER (The Book)**: Journals all desk calls, tracks paper P&L, audits performance metrics, and detects execution errors.
 13. **RELAY (Alert & Routine Manager)**: The desk's watchtower. Monitors price thresholds, indicators, SEC filings, macro calendar dates, position risk, and data health. Executes scheduled timezone-aware market routines. Strictly prohibited from trading.
+14. **ARCHIVE (Research Memory, Playbooks & Reviews)**: The desk's local research librarian and memory vault. Indexes theses, trade reviews, setups, and playbooks via SQLite FTS5 and local embeddings. Calculates setup expectancy, tracks discipline scores, and enables zero-cloud privacy. Strictly prohibited from trading.
 
 ---
 
@@ -38,6 +39,28 @@ F.R.I.D.A.Y. is a voice-driven AI trading research desk powered by a central orc
 - **Multi-Tier Notifications**: Persistent Signal Log entries, non-blocking HUD toasts with auto-dismiss and 1-click symbol chart routing, optional Web Audio synthesized chime alerts, and opt-in OS desktop notifications (`Notification.permission`).
 - **SQLite Persistence**: Full local persistence across 3 relational tables (`alerts`, `routines`, `alert_events`).
 - **Security Boundary**: RELAY can alert and request Sentinel risk reviews, but is strictly prohibited from executing, modifying, or authorizing paper orders.
+
+---
+
+## 🏛️ ARCHIVE Research Memory, Playbooks & Trade Reviews (Phase 6.5)
+- **Local-First Knowledge Base**: Built on SQLite with WAL mode (`PRAGMA journal_mode=WAL`) across 9 relational and FTS5 tables (`research_items`, `research_links`, `playbooks`, `playbook_trades`, `trade_reviews`, `archive_embeddings`, `archive_tags`, `archive_events`, `archive_exports`).
+- **Hybrid Retrieval Engine**: Seamlessly fuses exact symbol match, tag overlap, FTS5 BM25 keyword relevance, local vector cosine similarity, and recency signals with transparent match explanations (`services/archive/retrieval.js`).
+- **Auto-Archiving Pipelines**:
+  - Automatically archives completed workflows, paper trade fills, trade closures, Sentinel vetoes with reasons, news events, and user notes.
+  - Generates pre-populated draft trade reviews upon paper trade exit.
+- **Playbook Engine (`services/archive/playbookEngine.js`)**:
+  - Extracts repeatable strategies from historical closed trades.
+  - Computes verified expectancy metrics: win rate, average R, profit factor, max drawdown, and entry/invalidation rules.
+  - Serves historical evidence to COMPASS during new trade planning.
+- **Trade Review Engine (`services/archive/reviewEngine.js`)**:
+  - Transparent Process & Discipline scoring (0–100) based on objective rules (written thesis, defined invalidation, stop respected, no revenge trading).
+  - Tracks emotional tags (user-authored only) and mistake patterns (e.g. entered without stop, FOMO chased).
+- **Zero-Cloud Privacy Invariants**:
+  - 100% local persistence by default. No cloud uploads, no telemetry on private journals.
+  - Zero unsolicited LLM calls on private journal text without explicit user direction.
+  - Item deletion cascades immediately to FTS5 search records and vector embeddings.
+- **Export Engine**: Explicit user-controlled export across Markdown, JSON, and CSV (`exportArchive`).
+- **Cyber-HUD Archive Panel (`ArchiveManagerView.jsx`)**: Dedicated multi-tab interface for Research, Playbooks, Reviews, and Weekly Reviews with filters, search, and detail modal.
 
 ---
 
@@ -148,6 +171,20 @@ npm run dev
 - [x] Cyber-HUD Watchtower panel ([`AlertManagerView.jsx`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/app/src/components/AlertManagerView.jsx)) with tabs, filters, search, quick alert creator, and routine controls
 - [x] Strict security boundary: RELAY cannot execute trades, authorize orders, or bypass Sentinel/Pilot
 - [x] Full automated test coverage: **111/111 tests passing** across 13 test suites
+
+## Phase 6.5 Pass/Fail Checklist (ARCHIVE Research Memory, Playbooks & Trade Reviews)
+- [x] Specialist agent **ARCHIVE** in [`agents/archive`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/agents/archive) with `ResearchItemSchema`, `PlaybookSchema`, and `TradeReviewSchema` Zod validation
+- [x] Natural language intent parser for 14 research intents: `save_research`, `search_research`, `summarize_research`, `create_playbook`, `find_playbook`, `update_playbook`, `archive_trade`, `review_trade`, `find_similar_trades`, `find_trades_by_event`, `find_mistakes`, `generate_weekly_review`, `export_archive`, `delete_archive_item`
+- [x] SQLite WAL database ([`services/archive/archivePersistence.js`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/services/archive/archivePersistence.js)) spanning 9 tables with FTS5 virtual tables (`research_items_fts`) and BM25 ranking
+- [x] Hybrid retrieval engine ([`services/archive/retrieval.js`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/services/archive/retrieval.js)) blending exact symbol, tag, FTS5 keyword, local vector cosine similarity, and recency signals with transparent match reasons
+- [x] Automatic archiving pipelines ([`services/archive/autoArchive.js`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/services/archive/autoArchive.js)) for trade plans, paper fills, trade exits, Sentinel vetoes, news catalysts, and user notes
+- [x] Playbook generation engine ([`services/archive/playbookEngine.js`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/services/archive/playbookEngine.js)) calculating verified win rate, expectancy, average R, and profit factor strictly from closed paper trades
+- [x] Trade review engine ([`services/archive/reviewEngine.js`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/services/archive/reviewEngine.js)) generating auto-drafted post-trade reviews with 10-point transparent process & discipline scores
+- [x] Export engine supporting Markdown, JSON, and CSV formats with date/symbol filtering
+- [x] Cyber-HUD Archive panel ([`ArchiveManagerView.jsx`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/app/src/components/ArchiveManagerView.jsx)) with search bar, symbol/kind/setup/timeframe/outcome filters, result cards, and detail inspector
+- [x] Strict privacy & security: zero cloud uploads by default, zero telemetry on private journals, no unsolicited LLM access to journal text, and immediate embedding cascade on item deletion
+- [x] Strict execution boundary: ARCHIVE cannot place, modify, approve, or cancel orders
+- [x] Full automated test coverage: **184/184 tests passing** across 17 test suites (unit, integration, contract, archive-search)
 
 ---
 

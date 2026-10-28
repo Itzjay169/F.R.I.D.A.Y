@@ -18,6 +18,7 @@ import HealthModal from './components/HealthModal.jsx';
 import WorkflowView from './components/WorkflowView.jsx';
 import AlertManagerView from './components/AlertManagerView.jsx';
 import AlertToast from './components/AlertToast.jsx';
+import ArchiveManagerView from './components/ArchiveManagerView.jsx';
 
 import {
   fetchLiveQuotes,
@@ -698,6 +699,20 @@ export default function App() {
       {activeTab === 'alerts' && (
         <div style={{ padding: '8px 0', height: '100%', overflow: 'hidden' }}>
           <AlertManagerView
+            onSendToChart={(sym) => {
+              setChartSymbol(sym);
+              setActiveTab('chart');
+            }}
+            onNotify={(agent, message, color) => addSignal(agent, message, color)}
+            onSpeak={(text) => speakResponse(text)}
+          />
+        </div>
+      )}
+
+      {/* ARCHIVE — Research Library, Playbooks, Trade Reviews */}
+      {activeTab === 'archive' && (
+        <div style={{ padding: '8px 0', height: '100%', overflow: 'hidden' }}>
+          <ArchiveManagerView
             onSendToChart={(sym) => {
               setChartSymbol(sym);
               setActiveTab('chart');

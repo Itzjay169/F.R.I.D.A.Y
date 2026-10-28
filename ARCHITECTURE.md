@@ -48,6 +48,7 @@ graph TD
 | **PILOT** | Paper order matching & execution | Approved plan + Signed HMAC token | Paper execution tickets | **Paper Only (Phase 3)** |
 | **LEDGER** | Trade journaling, paper P&L, audits | Paper execution stream | P&L records, performance metrics | **Audit Only** |
 | **RELAY** | Alert & routine manager, desk watchtower | Quotes, indicators, filings, calendar, positions | `AlertSchema`, `RoutineSchema`, `AlertTriggerEventSchema` | **Strictly Prohibited** |
+| **ARCHIVE** | Research librarian, playbooks, trade memory | Theses, notes, reviews, playbooks, trade history | `ResearchItemSchema`, `PlaybookSchema`, `TradeReviewSchema` | **Strictly Prohibited** |
 
 ---
 
@@ -240,4 +241,86 @@ graph TD
 - `alerts`: Stores alert definitions, conditions, triggers, actions, and current status (`active`, `paused`, `triggered`, `expired`).
 - `routines`: Stores routine schedules, cron expressions, workflow bindings, and execution timestamps.
 - `alert_events`: Tamper-evident append-only trigger history with severity ratings (`info`, `important`, `critical`).
+
+---
+
+## 7. ARCHIVE Research Memory & Playbook Architecture (Phase 6.5)
+
+```mermaid
+graph TD
+    UserNotes[User Theses & Notes] --> ArchivePersistence[Archive Persistence Layer]
+    ClosedTrades[Paper Trade Closes] --> AutoArchive[Auto-Archive Engine]
+    Vetoes[Sentinel Vetoes] --> AutoArchive
+    Workflows[Workflow Plans] --> AutoArchive
+    AutoArchive --> ArchivePersistence
+
+    ArchivePersistence --> SQLiteWAL[(friday_archive.db · WAL Mode)]
+    
+    subgraph SQLite Engine
+        FTS5[FTS5 Virtual Index · BM25]
+        Embeddings[Local Vector Embeddings]
+        PlaybookStore[Playbooks & Trade History]
+        ReviewStore[Trade Reviews & Process Scores]
+    end
+
+    SQLiteWAL --> FTS5
+    SQLiteWAL --> Embeddings
+    SQLiteWAL --> PlaybookStore
+    SQLiteWAL --> ReviewStore
+
+    Query[Natural Language Query] --> HybridRetrieval[Hybrid Retrieval Engine]
+    FTS5 --> HybridRetrieval
+    Embeddings --> HybridRetrieval
+    HybridRetrieval --> Explainer[Match Explanation Generator]
+    Explainer --> Results[Ranked Evidence Cards]
+
+    CompassPlanner[COMPASS · Planning New Trade] -.->|Evidence Query| PlaybookStore
+    PlaybookStore -.->|Historical Expectancy| CompassPlanner
+```
+
+### 1. SQLite Relational & Virtual Schema (`services/archive/archivePersistence.js`)
+Operates under WAL mode (`PRAGMA journal_mode=WAL`) across 9 relational and full-text tables:
+1. **`research_items`**: Core research items (theses, notes, chart snapshots, trade plans, reviews, playbooks, weekly reviews) with strict Zod validation.
+2. **`research_items_fts`**: FTS5 virtual table indexing `title`, `symbol`, `thesis`, `body`, `tags`, `setup`, and `market_regime` using BM25 ranking.
+3. **`research_links`**: Relational bridge linking research items to trades, workflows, news articles, and SEC filings.
+4. **`playbooks`**: Repeatable trading setups containing rules (entry, invalidation, stop, target, sizing) and verified performance metrics.
+5. **`playbook_trades`**: Associative junction binding closed trades to playbook records.
+6. **`trade_reviews`**: Detailed post-trade reviews with objective process and discipline scores, what went right/wrong, mistakes, and lessons.
+7. **`archive_embeddings`**: Local vector store supporting 64-dimensional dense vectors and cosine similarity search.
+8. **`archive_tags`**: Tag index supporting multi-tag search and autocomplete.
+9. **`archive_events`**: Relational event markers linking trades and notes to macro catalyst dates (e.g. CPI, FOMC).
+10. **`archive_exports`**: Audit log recording timestamp, export format (Markdown, JSON, CSV), and record counts.
+
+### 2. Hybrid Retrieval Engine (`services/archive/retrieval.js`)
+Blends 5 signals into a single relevance score with a human-readable match explanation:
+- **Exact Symbol Match** ($+3.0$ weight)
+- **Tag Overlap** ($+2.0$ per matching tag)
+- **FTS5 Keyword Relevance** ($+2.5 \times \text{BM25}$)
+- **Local Semantic Similarity** ($+2.0 \times \text{Cosine Similarity}$)
+- **Recency Decay** (exponential decay halving over 90 days)
+- **Transparent Output**: Every result includes `match_reason`, e.g.:
+  > *"Matched because it shares symbol NVDA, tag 'breakout', keyword relevance (score 4.8), and high semantic similarity (0.89)."*
+
+### 3. Playbook Engine (`services/archive/playbookEngine.js`)
+- Groups historical closed trades by setup, timeframe, and market regime.
+- Calculates verified mathematical expectancy:
+  $$\text{Expectancy} = (\text{Win Rate} \times \text{Average Win}) - (\text{Loss Rate} \times \text{Average Loss})$$
+  $$\text{Profit Factor} = \frac{\sum \text{Gross Profits}}{\sum \text{Gross Losses}}$$
+- Extracts observed rule patterns from trades (entry trigger, invalidation, stop placement, targets).
+- Provides evidence directly to COMPASS during new trade generation without giving execution advice.
+
+### 4. Trade Review & Process Score Engine (`services/archive/reviewEngine.js`)
+- Transparent 10-point process scoring ($0–100$ scale) based on objective trading discipline:
+  1. Written thesis established (+10)
+  2. Defined invalidation level (+10)
+  3. Pre-set stop-loss at entry (+15)
+  4. Position size respected risk limit (+10)
+  5. Stop-loss never moved against position (+15)
+  6. Planned exit followed (+10)
+  7. Avoided event-risk violations (+10)
+  8. Avoided revenge entry after a loss (+10)
+  9. Avoided overtrading (+5)
+  10. Completed post-trade review (+5)
+- Discipline score calculates execution faithfulness ($100 - \sum \text{penalties}$).
+- Objective separation: High process score can coexist with a losing trade, and winning trades can receive low process scores for poor discipline.
 
