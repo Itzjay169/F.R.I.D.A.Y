@@ -800,6 +800,39 @@ export default function App() {
             onBackToHud={() => setActiveTab('hud')}
             onSendContactMessage={async (payload) => {
               try {
+                // Check for client-side Web3Forms API key (required for direct browser delivery on Web3Forms free tier)
+                const web3Key = (typeof __WEB_FORM_API_KEY__ !== 'undefined' && __WEB_FORM_API_KEY__) ||
+                                (import.meta.env && import.meta.env.VITE_WEB_FORM_API_KEY);
+                if (web3Key && web3Key.length > 10 && !web3Key.includes('placeholder') && !web3Key.includes('your_')) {
+                  const res = await fetch('https://api.web3forms.com/submit', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      access_key: web3Key,
+                      name: payload.fullName,
+                      email: payload.email,
+                      replyto: payload.email,
+                      subject: `[VEXORA] ${payload.category}: ${payload.subject}`,
+                      category: payload.category,
+                      message: payload.message,
+                      from_name: 'Vexora Technology Contact'
+                    })
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (res.ok && data.success) {
+                    return {
+                      success: true,
+                      message: 'Your message has been submitted successfully and delivered to Jaykishan Das. Thank you for contacting Vexora Technology.'
+                    };
+                  }
+                  if (data?.message) {
+                    return { success: false, error: data.message };
+                  }
+                }
+
                 if (window.fridayAPI && typeof window.fridayAPI.sendContactMessage === 'function') {
                   return await window.fridayAPI.sendContactMessage(payload);
                 }

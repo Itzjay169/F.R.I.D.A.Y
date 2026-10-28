@@ -854,6 +854,9 @@ export default defineConfig({
     }
   ],
   base: './',
+  define: {
+    '__WEB_FORM_API_KEY__': JSON.stringify(process.env.WEB_FORM_API_KEY || '')
+  },
   server: {
     port: 5173,
     strictPort: true
