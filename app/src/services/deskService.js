@@ -639,8 +639,36 @@ Format strictly as JSON with keys:
 export function detectLocalAction(command) {
   const norm = (command || '').toLowerCase().trim();
 
-  // --- P&L / Portfolio / Book commands ---
+  // --- Direct navigation tabs ---
   if (
+    norm === 'risk' || norm === 'open risk' || norm === 'show risk' ||
+    norm === 'risk tab' || norm === 'portfolio risk tab' ||
+    norm === 'sentinel-x' || norm === 'sentinel x'
+  ) {
+    return { action: 'SHOW_RISK' };
+  }
+
+  if (
+    norm === 'archive' || norm === 'open archive' || norm === 'show archive' ||
+    norm === 'archive tab' || norm === 'research archive' || norm === 'research memory'
+  ) {
+    return { action: 'SHOW_ARCHIVE' };
+  }
+
+  if (
+    norm === 'alerts' || norm === 'open alerts' || norm === 'show alerts' ||
+    norm === 'alerts tab' || norm === 'watchtower' || norm === 'alert manager'
+  ) {
+    return { action: 'SHOW_ALERTS' };
+  }
+
+  // --- P&L / Portfolio / Book commands (ensure risk queries pass through to Sentinel-X) ---
+  const isRiskQuery =
+    norm.includes('risk') || norm.includes('heat') || norm.includes('kill switch') ||
+    norm.includes('killswitch') || norm.includes('correlation') || norm.includes('stress test') ||
+    norm.includes('drawdown') || norm.includes('defensive plan');
+
+  if (!isRiskQuery && (
     norm.includes('p&l') || norm.includes('pnl') || norm.includes('p and l') ||
     norm.includes('p & l') || norm.includes('profit and loss') ||
     norm.includes('portfolio') || norm.includes('positions') ||
@@ -650,7 +678,7 @@ export function detectLocalAction(command) {
     norm.includes('equity') || norm.includes('show my') ||
     norm.includes('how am i doing') || norm.includes('desk equity') ||
     norm.includes('my trades') || norm.includes('trade book')
-  ) {
+  )) {
     return { action: 'SHOW_PORTFOLIO' };
   }
 

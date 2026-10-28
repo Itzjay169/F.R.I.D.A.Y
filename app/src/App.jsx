@@ -386,6 +386,33 @@ export default function App() {
           return;
         }
 
+        case 'SHOW_RISK': {
+          setActiveTab('risk');
+          const spokenText = 'Switching to Sentinel-X portfolio risk center. Monitoring heat, correlation, and kill switch.';
+          addSignal('SENTINEL', 'Portfolio risk center opened — real-time risk monitor online', '#ef4444');
+          addSignal('FRIDAY', spokenText, 'var(--neon-cyan)');
+          speakResponse(spokenText);
+          return;
+        }
+
+        case 'SHOW_ARCHIVE': {
+          setActiveTab('archive');
+          const spokenText = 'Opening the ARCHIVE research memory, playbooks, and trade review journal.';
+          addSignal('ARCHIVE', 'ARCHIVE library opened — historical notes and trade reviews ready', '#a855f7');
+          addSignal('FRIDAY', spokenText, 'var(--neon-cyan)');
+          speakResponse(spokenText);
+          return;
+        }
+
+        case 'SHOW_ALERTS': {
+          setActiveTab('alerts');
+          const spokenText = 'Opening RELAY watchtower alerts and proactive routine manager.';
+          addSignal('RELAY', 'Watchtower alerts center opened — monitoring market conditions', '#f59e0b');
+          addSignal('FRIDAY', spokenText, 'var(--neon-cyan)');
+          speakResponse(spokenText);
+          return;
+        }
+
         default:
           break;
       }
@@ -450,7 +477,7 @@ export default function App() {
       }
 
       // If a risk query or kill switch command was run, switch to risk view
-      const lowerCmd = commandText.toLowerCase();
+      const lowerCmd = cmd.toLowerCase();
       if (
         data.risk ||
         lowerCmd.includes('portfolio risk') ||

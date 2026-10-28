@@ -4,6 +4,8 @@ import { createWorkflow } from './workflow/workflowEngine.js';
 import { parseNaturalLanguageAlert, RelayAgent } from '../agents/relay/relayAgent.js';
 import { listAlerts, pauseAlerts, resumeAlerts, deleteAlert } from './alerts/alertPersistence.js';
 import { executeRoutineWithOverlapProtection } from './alerts/routineScheduler.js';
+import { SentinelXAgent } from '../agents/sentinel-x/sentinelXAgent.js';
+import { ArchiveAgent } from '../agents/archive/archiveAgent.js';
 dotenv.config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyCxft1Ou8eg2ejDI7UE5s0rdX4L_MYAJzE';
@@ -82,6 +84,54 @@ Return STRICT JSON ONLY:
   const isPlanIntent = normCmd.includes('plan') || normCmd.includes('workflow') || normCmd.includes('setup') || normCmd.includes('strategy');
   const isAlertIntent = normCmd.includes('alert') || normCmd.includes('remind') || normCmd.includes('warn');
   const isRoutineIntent = normCmd.includes('briefing') || normCmd.includes('routine') || normCmd.includes('post-market review') || normCmd.includes('checklist') || normCmd.includes('review my journal');
+  const isRiskIntent = normCmd.includes('risk') || normCmd.includes('heat') || normCmd.includes('kill switch') || normCmd.includes('killswitch') || normCmd.includes('stress test') || normCmd.includes('correlation') || normCmd.includes('defensive plan') || normCmd.includes('reduce my risk');
+  const isArchiveIntent = normCmd.includes('archive') || normCmd.includes('playbook') || normCmd.includes('trade review') || normCmd.includes('expectancy') || normCmd.includes('learning curve');
+  const isPnlIntent = normCmd.includes('p&l') || normCmd.includes('pnl') || normCmd.includes('portfolio') || normCmd.includes('positions') || normCmd.includes('equity') || normCmd.includes('book');
+  const isChartIntent = normCmd.includes('chart') || normCmd.includes('candle') || normCmd.includes('technical') || normCmd.includes('graph');
+
+  if (isRiskIntent) {
+    try {
+      const sentinelX = new SentinelXAgent();
+      const res = await sentinelX.handleCommand(command);
+      return {
+        spokenText: res.spokenText || 'Sentinel-X risk evaluation complete.',
+        primaryAgent: 'SENTINEL-X',
+        signals: res.signals || [
+          { agent: 'SENTINEL-X', message: res.spokenText || 'Portfolio risk evaluation completed.' }
+        ],
+        risk: res.risk || res,
+        agentLoads: {
+          athena: 15, chartist: 25, oracle: 40, atlas: 30,
+          capitol: 20, scout: 20, sentinel: 90, pilot: 20, ledger: 40
+        },
+        sources: ['sentinel-x:portfolio-model', 'sentinel-x:correlation-engine']
+      };
+    } catch (e) {
+      // proceed to next intent
+    }
+  }
+
+  if (isArchiveIntent) {
+    try {
+      const archive = new ArchiveAgent();
+      const res = await archive.handleCommand(command);
+      return {
+        spokenText: res.spokenText || 'ARCHIVE research memory query executed.',
+        primaryAgent: 'ARCHIVE',
+        signals: res.signals || [
+          { agent: 'ARCHIVE', message: res.spokenText || 'Research memory item retrieved.' }
+        ],
+        archive: res.archive || res,
+        agentLoads: {
+          athena: 20, chartist: 20, oracle: 30, atlas: 20,
+          capitol: 20, scout: 60, sentinel: 30, pilot: 10, ledger: 50
+        },
+        sources: ['archive:sqlite', 'archive:vector-memory']
+      };
+    } catch (e) {
+      // proceed to next intent
+    }
+  }
 
   if (isAlertIntent) {
     const relay = new RelayAgent();
