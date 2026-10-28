@@ -662,6 +662,16 @@ export function detectLocalAction(command) {
     return { action: 'SHOW_ALERTS' };
   }
 
+  if (
+    norm === 'about' || norm === 'open about' || norm === 'show about' ||
+    norm === 'about tab' || norm === 'developer' || norm === 'about developer' ||
+    norm === 'vexora' || norm === 'vexora technology' || norm === 'who made this' ||
+    norm === 'who created this' || norm === 'who built this' || norm === 'who is the developer' ||
+    norm === 'jaykishan' || norm === 'jaykishan das'
+  ) {
+    return { action: 'SHOW_ABOUT' };
+  }
+
   // --- P&L / Portfolio / Book commands (ensure risk queries pass through to Sentinel-X) ---
   const isRiskQuery =
     norm.includes('risk') || norm.includes('heat') || norm.includes('kill switch') ||

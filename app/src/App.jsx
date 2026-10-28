@@ -20,6 +20,7 @@ import AlertManagerView from './components/AlertManagerView.jsx';
 import AlertToast from './components/AlertToast.jsx';
 import ArchiveManagerView from './components/ArchiveManagerView.jsx';
 import PortfolioRiskView from './components/PortfolioRiskView.jsx';
+import AboutDeveloperView from './components/AboutDeveloper/AboutDeveloperView.jsx';
 
 import {
   fetchLiveQuotes,
@@ -413,6 +414,14 @@ export default function App() {
           return;
         }
 
+        case 'SHOW_ABOUT': {
+          setActiveTab('about');
+          const spokenText = 'Opening About Developer and Vexora Technology. Jaykishan Das is the lead architect of F.R.I.D.A.Y.';
+          addSignal('FRIDAY', spokenText, 'var(--neon-cyan)');
+          speakResponse(spokenText);
+          return;
+        }
+
         default:
           break;
       }
@@ -516,7 +525,10 @@ export default function App() {
   return (
     <div className="hud-container">
       {/* 1. Top Bar */}
-      <TopBar onOpenHealth={() => setShowHealthModal(true)} />
+      <TopBar
+        onOpenHealth={() => setShowHealthModal(true)}
+        onOpenAbout={() => setActiveTab('about')}
+      />
 
       {/* 1.5. Breaking News Live Cyber Banner */}
       {breakingNewsAlert && (
@@ -777,6 +789,30 @@ export default function App() {
             }}
             onNotify={(agent, message, color) => addSignal(agent, message, color)}
             onSpeak={(text) => speakResponse(text)}
+          />
+        </div>
+      )}
+
+      {/* About Developer & Vexora Technology Profile */}
+      {activeTab === 'about' && (
+        <div style={{ padding: '8px 0', height: '100%', overflow: 'hidden' }}>
+          <AboutDeveloperView
+            onBackToHud={() => setActiveTab('hud')}
+            onSendContactMessage={async (payload) => {
+              try {
+                if (window.fridayAPI && typeof window.fridayAPI.sendContactMessage === 'function') {
+                  return await window.fridayAPI.sendContactMessage(payload);
+                }
+                const res = await fetch('/api/contact/send', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload)
+                });
+                return await res.json();
+              } catch (e) {
+                return { success: false, error: e.message };
+              }
+            }}
           />
         </div>
       )}

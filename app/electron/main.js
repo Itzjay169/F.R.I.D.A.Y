@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import { sendContactMessage } from '../../services/contactService.js';
 
 dotenv.config();
 
@@ -72,6 +73,13 @@ ipcMain.handle('voice:toggleMic', async (_event, listening) => {
 ipcMain.handle('voice:speak', async (_event, { agentId, text }) => {
   console.log(`[TTS IPC] Agent ${agentId} requesting to speak: "${text}"`);
   return { status: 'queued', agentId };
+});
+
+ipcMain.handle('contact:sendMessage', async (event, payload) => {
+  if (mainWindow && event.sender !== mainWindow.webContents) {
+    return { success: false, error: 'Unauthorized IPC sender' };
+  }
+  return await sendContactMessage(payload, 'electron_desktop_user');
 });
 
 app.whenReady().then(() => {

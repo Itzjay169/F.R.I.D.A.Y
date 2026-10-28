@@ -69,7 +69,7 @@ export default function CommandBar({
 
         {/* View Switchers */}
         <div style={{ display: 'flex', gap: '4px', borderLeft: '1px solid var(--border-cyan)', paddingLeft: '8px' }}>
-          {['hud', 'chart', 'workflows', 'alerts', 'archive', 'risk', 'portfolio', 'news', 'journal'].map((tab) => (
+          {['hud', 'chart', 'workflows', 'alerts', 'archive', 'risk', 'portfolio', 'news', 'journal', 'about'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -77,9 +77,15 @@ export default function CommandBar({
                 fontFamily: 'var(--font-hud)',
                 fontSize: '9px',
                 padding: '2px 8px',
-                background: activeTab === tab ? 'rgba(0, 240, 255, 0.15)' : 'transparent',
-                border: activeTab === tab ? '1px solid var(--border-cyan-bright)' : '1px solid transparent',
-                color: activeTab === tab ? '#ffffff' : 'var(--text-muted)',
+                background: activeTab === tab
+                  ? (tab === 'about' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(0, 240, 255, 0.15)')
+                  : 'transparent',
+                border: activeTab === tab
+                  ? (tab === 'about' ? '1px solid #f59e0b' : '1px solid var(--border-cyan-bright)')
+                  : '1px solid transparent',
+                color: activeTab === tab
+                  ? (tab === 'about' ? '#fef3c7' : '#ffffff')
+                  : 'var(--text-muted)',
                 borderRadius: '2px',
                 cursor: 'pointer',
                 letterSpacing: '0.8px',

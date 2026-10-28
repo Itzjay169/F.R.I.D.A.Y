@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Squircle Gradient -->
+    <radialGradient id="bgGlow" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#161c2b"/>
+      <stop offset="70%" stop-color="#0c101a"/>
+      <stop offset="100%" stop-color="#06080e"/>
+    </radialGradient>
+
+    <!-- Metallic Dark Slate Left Arm Gradient -->
+    <linearGradient id="slateArmGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#808fa5"/>
+      <stop offset="35%" stop-color="#475569"/>
+      <stop offset="85%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+
+    <!-- Vibrant Electric Blue Right Arm Gradient -->
+    <linearGradient id="blueArmGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="40%" stop-color="#0ea5e9"/>
+      <stop offset="85%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#0369a1"/>
+    </linearGradient>
+
+    <!-- Glowing Circuit Line Gradient -->
+    <linearGradient id="circuitGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#00f0ff"/>
+      <stop offset="100%" stop-color="#a5f3fc"/>
+    </linearGradient>
+
+    <!-- Soft Drop Shadow Filters -->
+    <filter id="tileShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#000000" flood-opacity="0.8"/>
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#00f0ff" flood-opacity="0.15"/>
+    </filter>
+
+    <filter id="neonGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#00f0ff" flood-opacity="0.9"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="14" flood-color="#0284c7" flood-opacity="0.6"/>
+    </filter>
+
+    <filter id="arm3dBevel">
+      <feDropShadow dx="-4" dy="-4" stdDeviation="3" flood-color="#94a3b8" flood-opacity="0.4"/>
+      <feDropShadow dx="6" dy="10" stdDeviation="8" flood-color="#000000" flood-opacity="0.75"/>
+    </filter>
+  </defs>
+
+  <!-- Squircle Base Frame -->
+  <rect x="24" y="24" width="464" height="464" rx="116" ry="116" fill="url(#bgGlow)" stroke="rgba(255, 255, 255, 0.08)" stroke-width="2" filter="url(#tileShadow)"/>
+
+  <!-- Left Arm of 'V' (Dark Metallic Slate with 3D Bevel) -->
+  <path d="M 112 152 
+           C 110 148, 114 144, 120 144 
+           L 194 144 
+           C 198 144, 202 147, 205 151 
+           L 256 268 
+           L 220 348 
+           L 112 152 Z" 
+        fill="url(#slateArmGrad)" 
+        stroke="rgba(255, 255, 255, 0.25)" 
+        stroke-width="1.5"
+        filter="url(#arm3dBevel)"/>
+
+  <!-- Bevel Highlight on Left Arm Top Edge -->
+  <path d="M 116 148 L 192 148" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+
+  <!-- Right Arm of 'V' (Electric Cyan/Blue Metallic) -->
+  <path d="M 324 144 
+           L 392 144 
+           C 398 144, 402 149, 400 155 
+           L 272 388 
+           C 264 402, 244 402, 236 388 
+           L 216 352 
+           L 256 268 
+           L 324 144 Z" 
+        fill="url(#blueArmGrad)" 
+        stroke="#38bdf8" 
+        stroke-width="1.5"
+        filter="url(#arm3dBevel)"/>
+
+  <!-- Glowing Neon Circuit Trace Inside Right Arm -->
+  <!-- Main circuit diagonal trace -->
+  <path d="M 340 190 
+           L 274 316 
+           L 255 316 
+           L 255 352" 
+        fill="none" 
+        stroke="url(#circuitGrad)" 
+        stroke-width="9" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" 
+        filter="url(#neonGlow)"/>
+
+  <!-- Top-Right Circuit Node Circle -->
+  <circle cx="340" cy="190" r="14" fill="#0c101a" stroke="url(#circuitGrad)" stroke-width="7" filter="url(#neonGlow)"/>
+  <circle cx="340" cy="190" r="4" fill="#00f0ff"/>
+
+  <!-- Bottom Apex Circuit Contact Pad -->
+  <rect x="250" y="352" width="10" height="12" rx="2" fill="#ffffff" filter="url(#neonGlow)"/>
+  <rect x="266" y="334" width="7" height="28" rx="2" fill="#e0f2fe" opacity="0.9" filter="url(#neonGlow)"/>
+</svg>

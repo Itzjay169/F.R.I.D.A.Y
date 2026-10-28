@@ -202,3 +202,4 @@ export const DESK_CONFIG = {
 };
 
 export const DEFAULT_RISK_CONFIG = DESK_CONFIG.risk;
+export { DEVELOPER_CONFIG } from './developerConfig.js';

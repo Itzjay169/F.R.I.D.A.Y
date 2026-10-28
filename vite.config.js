@@ -70,6 +70,7 @@ import { calculateRiskBudget } from './services/sentinel-x/riskBudget.js';
 import { killSwitchManager } from './services/sentinel-x/killSwitch.js';
 import { generateRiskReductionPlan } from './services/sentinel-x/riskReductionPlanner.js';
 import { DEFAULT_RISK_CONFIG } from './shared/config.js';
+import { sendContactMessage } from './services/contactService.js';
 
 export default defineConfig({
   plugins: [
@@ -824,6 +825,28 @@ export default defineConfig({
           } catch (err) {
             res.statusCode = 500;
             res.end(JSON.stringify({ error: err.message }));
+          }
+        });
+
+        // ═══════════════════════════════════════════════════════════
+        // VEXORA CONTACT SERVICE API
+        // ═══════════════════════════════════════════════════════════
+        server.middlewares.use('/api/contact/send', async (req, res) => {
+          if (req.method !== 'POST') {
+            res.statusCode = 405;
+            return res.end('Method not allowed');
+          }
+          try {
+            const body = await parseJson(req);
+            const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'local_user';
+            const result = await sendContactMessage(body, clientIp);
+            res.setHeader('Content-Type', 'application/json');
+            res.statusCode = result.success ? 200 : (result.unconfigured ? 503 : 400);
+            res.end(JSON.stringify(result));
+          } catch (err) {
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ success: false, error: 'Internal contact server error' }));
           }
         });
       }

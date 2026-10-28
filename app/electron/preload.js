@@ -12,6 +12,9 @@ contextBridge.exposeInMainWorld('fridayAPI', {
   // Intent & Command routing
   dispatchCommand: (command) => ipcRenderer.invoke('desk:command', command),
   
+  // Developer Contact
+  sendContactMessage: (payload) => ipcRenderer.invoke('contact:sendMessage', payload),
+  
   // Real-time events from main process (feeds, logs, agent states)
   onSignalUpdate: (callback) => {
     const handler = (_event, data) => callback(data);
