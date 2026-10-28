@@ -13,7 +13,7 @@ export const DEVELOPER_CONFIG = {
     introduction:
       "I'm Jaykishan Das, a software developer passionate about building intelligent applications, modern digital experiences, and practical software solutions. Through Vexora Technology, I aim to turn ideas into useful products by combining software engineering, artificial intelligence, and user-focused design.",
     socialLinks: {
-      github: 'https://github.com/Itz30jay',
+      github: 'https://github.com/Itzjay169',
       linkedin: 'https://linkedin.com/in/jaykishandas',
       email: null // Intentionally unexposed in client bundle; handled via secure contact form
     }

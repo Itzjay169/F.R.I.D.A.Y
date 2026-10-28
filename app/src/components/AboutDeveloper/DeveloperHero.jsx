@@ -263,7 +263,7 @@ export default function DeveloperHero({ onScrollToContact }) {
               }}
             >
               <GithubIcon size={15} />
-              <span>GitHub / Itz30jay</span>
+              <span>GitHub / Itzjay169</span>
               <ExternalLink size={12} color="#94a3b8" />
             </a>
 
