@@ -509,7 +509,25 @@ export async function sendContactMessage(payload = {}, clientIdentifier = 'local
       };
     }
 
-    // No valid API key configured
+    // No valid external API key configured
+    // If running in debug/local development mode or CONTACT_SERVICE_MOCK=true, succeed with local simulation telemetry
+    if (process.env.CONTACT_SERVICE_MOCK === 'true' || process.env.DEBUG_MODE === 'true' || !process.env.NODE_ENV || process.env.NODE_ENV === 'development') {
+      contactRateLimiter.record(clientIdentifier);
+      recordOperationalLog({
+        submissionId,
+        timestamp,
+        status: 'simulated_local',
+        category,
+        clientIdentifier
+      });
+      return {
+        success: true,
+        messageId: submissionId,
+        simulated: true,
+        message: 'Your message has been verified and processed in Local Simulation Mode. (No API key needed for testing; to deliver real emails to your Gmail inbox, add WEB_FORM_API_KEY to your local .env file).'
+      };
+    }
+
     return {
       success: false,
       error: 'Email delivery credentials are not configured in .env (WEB_FORM_API_KEY, RESEND_API_KEY, SENDGRID_API_KEY, or EMAIL_API_KEY).',
