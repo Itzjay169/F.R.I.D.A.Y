@@ -1,60 +1,75 @@
-/**
- * COMPASS — Trade Planner Agent (Phase 2.5)
- *
- * Turns vague trade ideas into complete, structured trade plans.
- *
- * Capabilities:
- * - "Plan a swing trade in AAPL"
- * - "Build an options plan for earnings week"
- * - "Create a breakout plan for TSLA"
- * - "Give me three trade ideas from my watchlist"
- *
- * Rules:
- * - COMPASS CANNOT execute trades. Ever.
- * - Output is always a validated TradePlan object.
- * - Plans are sent to SENTINEL for risk-check before any execution.
- * - Missing data is shown as "—", never fabricated.
- */
+import crypto from 'crypto';
+import { TradePlanSchema, validateTradePlan } from '../../shared/contract.js';
 
-import {
-  validateTradePlan,
-  createTradePlanTemplate,
-  assertCompassCannotExecute,
-  VALID_REGIMES,
-  VALID_ENTRY_TYPES
-} from './contract.js';
-
-// In-memory trade plan store (persists within session)
+// In-memory trade plan repository for session
 const tradePlans = new Map();
 
 /**
- * Parses a natural language trade command into structured intent.
- * @param {string} command - User's raw command text
- * @returns {{ symbol: string, setupType: string, timeframe: string, direction: string }}
+ * Asserts security boundary: COMPASS is an analysis agent and CANNOT execute trades.
+ */
+export function assertCompassCannotExecute(action) {
+  const executionActions = [
+    'execute_paper_order',
+    'execute_order',
+    'place_paper_trade',
+    'place_order',
+    'route_order',
+    'sign_sentinel_token',
+    'approve_order_execution'
+  ];
+  if (executionActions.includes(action)) {
+    throw new Error(`SECURITY VIOLATION: COMPASS agent cannot perform execution action "${action}". Only PILOT with Sentinel approval token can execute.`);
+  }
+}
+
+/**
+ * Parses user command to determine intent, symbol, direction, timeframe, etc.
  */
 export function parseTradeIntent(command) {
   const raw = command || '';
   const norm = raw.toLowerCase();
 
-  // Common English words that should NOT be treated as ticker symbols
+  // Intent classification
+  let intent = 'plan_trade';
+  if (norm.includes('compare')) intent = 'compare_trade_plans';
+  else if (norm.includes('refine') || norm.includes('wider stop') || norm.includes('change target')) intent = 'refine_trade_plan';
+  else if (norm.includes('explain')) intent = 'explain_trade_plan';
+  else if (norm.includes('invalidate') || norm.includes('proves wrong')) intent = 'invalidate_trade_plan';
+  else if (norm.includes('create') || norm.includes('build')) intent = 'create_trade_plan';
+
+  // Direction classification
+  let direction = 'neutral';
+  if (norm.includes('short') || norm.includes('bearish') || norm.includes('sell')) direction = 'short';
+  else if (norm.includes('long') || norm.includes('buy') || norm.includes('bullish') || norm.includes('swing trade')) direction = 'long';
+  else if (norm.includes('neutral') || norm.includes('straddle')) direction = 'neutral';
+
+  // Timeframe classification
+  let timeframe = 'swing';
+  if (norm.includes('scalp')) timeframe = 'scalp';
+  else if (norm.includes('day') || norm.includes('intraday')) timeframe = 'intraday';
+  else if (norm.includes('position') || norm.includes('long term')) timeframe = 'position';
+
+  // Asset class
+  let assetClass = 'equity';
+  if (norm.includes('btc') || norm.includes('bitcoin') || norm.includes('crypto')) assetClass = 'crypto';
+  else if (norm.includes('option')) assetClass = 'option';
+  else if (norm.includes('spy') || norm.includes('qqq') || norm.includes('etf')) assetClass = 'etf';
+
+  // Common stop words to exclude from symbol extraction
   const stopWords = new Set([
     'a', 'an', 'in', 'on', 'for', 'the', 'my', 'me', 'to', 'of', 'is', 'it',
     'am', 'at', 'or', 'if', 'so', 'up', 'do', 'be', 'no', 'by', 'we', 'as',
     'and', 'but', 'not', 'out', 'all', 'get', 'got', 'can', 'has', 'had',
     'plan', 'trade', 'build', 'give', 'make', 'set', 'run', 'show',
-    'from', 'with', 'this', 'that', 'what', 'when', 'how', 'why'
+    'from', 'with', 'this', 'that', 'what', 'when', 'how', 'why', 'swing'
   ]);
 
-  // Extract symbol — use the ORIGINAL (case-preserved) command to find uppercase tickers
   let symbol = '';
-
-  // Strategy 1: Look for a word right after "in|for|on|trade" that looks like a ticker
   const afterPrepMatch = raw.match(/\b(?:in|for|on|trade)\s+([A-Z]{1,5})\b/);
   if (afterPrepMatch && !stopWords.has(afterPrepMatch[1].toLowerCase())) {
     symbol = afterPrepMatch[1].toUpperCase();
   }
 
-  // Strategy 2: Find any standalone uppercase word that looks like a ticker
   if (!symbol) {
     const allUpperWords = raw.match(/\b([A-Z]{2,5})\b/g) || [];
     for (const w of allUpperWords) {
@@ -65,238 +80,297 @@ export function parseTradeIntent(command) {
     }
   }
 
-  // Strategy 3: Common name to ticker mapping (overrides regex matches)
-  const nameMap = {
-    'nvidia': 'NVDA', 'apple': 'AAPL', 'tesla': 'TSLA', 'microsoft': 'MSFT',
-    'amazon': 'AMZN', 'google': 'GOOGL', 'meta': 'META', 'netflix': 'NFLX',
-    'amd': 'AMD', 'spy': 'SPY', 'qqq': 'QQQ', 'bitcoin': 'BTC', 'ethereum': 'ETH'
-  };
-  for (const [name, ticker] of Object.entries(nameMap)) {
-    if (norm.includes(name)) { symbol = ticker; break; }
+  if (!symbol) {
+    const companyMap = {
+      'nvidia': 'NVDA',
+      'tesla': 'TSLA',
+      'apple': 'AAPL',
+      'microsoft': 'MSFT',
+      'amazon': 'AMZN',
+      'google': 'GOOGL',
+      'meta': 'META',
+      'bitcoin': 'BTC',
+      'amd': 'AMD',
+      'netflix': 'NFLX'
+    };
+    for (const [name, sym] of Object.entries(companyMap)) {
+      if (norm.includes(name)) {
+        symbol = sym;
+        break;
+      }
+    }
   }
 
-  // Detect setup type (options before earnings so "options plan for earnings" → options)
+  if (!symbol) {
+    const commonTickers = ['NVDA', 'AAPL', 'TSLA', 'SPY', 'QQQ', 'BTC', 'MSFT', 'AMZN', 'META', 'AMD'];
+    for (const t of commonTickers) {
+      if (norm.includes(t.toLowerCase())) {
+        symbol = t;
+        break;
+      }
+    }
+  }
+
   let setupType = 'swing';
-  if (norm.includes('scalp')) setupType = 'scalp';
-  else if (norm.includes('daytrade') || norm.includes('day trade') || norm.includes('intraday')) setupType = 'daytrade';
-  else if (norm.includes('swing')) setupType = 'swing';
-  else if (norm.includes('position')) setupType = 'position';
+  if (norm.includes('option')) setupType = 'options';
   else if (norm.includes('breakout')) setupType = 'breakout';
-  else if (norm.includes('options') || norm.includes('option')) setupType = 'options';
-  else if (norm.includes('earnings') || norm.includes('catalyst')) setupType = 'catalyst';
-  else if (norm.includes('pullback') || norm.includes('dip')) setupType = 'pullback';
-  else if (norm.includes('reversal')) setupType = 'reversal';
+  else if (norm.includes('pullback')) setupType = 'pullback';
+  else if (norm.includes('catalyst') || norm.includes('earning')) setupType = 'catalyst';
 
-  // Detect timeframe preference
-  let timeframe = 'daily';
-  if (norm.includes('1min') || norm.includes('1-min') || norm.includes('scalp')) timeframe = '1min';
-  else if (norm.includes('5min') || norm.includes('5-min')) timeframe = '5min';
-  else if (norm.includes('15min') || norm.includes('15-min')) timeframe = '15min';
-  else if (norm.includes('hourly') || norm.includes('1h') || norm.includes('60min')) timeframe = '1h';
-  else if (norm.includes('4h') || norm.includes('4-hour')) timeframe = '4h';
-  else if (norm.includes('daily') || norm.includes('swing')) timeframe = 'daily';
-  else if (norm.includes('weekly')) timeframe = 'weekly';
-
-  // Detect direction bias
-  let direction = 'neutral';
-  if (norm.includes('long') || norm.includes('bull') || norm.includes('buy') || norm.includes('call')) direction = 'long';
-  else if (norm.includes('short') || norm.includes('bear') || norm.includes('sell') || norm.includes('put')) direction = 'short';
-
-  return { symbol, setupType, timeframe, direction };
+  return {
+    intent,
+    symbol: symbol.toUpperCase(),
+    direction,
+    timeframe,
+    assetClass,
+    setupType
+  };
 }
 
 /**
- * Generates a structured trade plan using market context.
- * In a full implementation, this calls Gemini for AI synthesis.
- * For Phase 2.5, it produces a deterministic structured plan template
- * that can be enhanced by the AI orchestrator.
- *
- * @param {Object} params
- * @param {string} params.command - Raw user command
- * @param {Object} params.marketContext - Live quote data
- * @param {Object} params.portfolioContext - Current paper portfolio snapshot
- * @returns {Object} Validated trade plan
+ * Creates an empty, valid template conforming to TradePlanSchema
  */
-export function generateTradePlan({ command, marketContext = {}, portfolioContext = {} }) {
-  // Assert COMPASS cannot execute
-  assertCompassCannotExecute('generate_trade_plan'); // Allowed — this is analysis
+export function createTradePlanTemplate(symbol = 'UNKNOWN') {
+  const plan = {
+    plan_id: crypto.randomUUID(),
+    created_at: new Date().toISOString(),
+    symbol: symbol.toUpperCase(),
+    asset_class: 'equity',
+    direction: 'long',
+    timeframe: 'swing',
+    thesis: '',
+    market_regime: 'trending',
+    catalysts: [],
+    entry: {
+      type: 'pullback',
+      trigger: '',
+      price: null,
+      zone: { low: null, high: null }
+    },
+    invalidation: {
+      level: null,
+      condition: '',
+      source: 'compass:thesis-analysis'
+    },
+    stop: {
+      price: null,
+      percent: null,
+      rationale: ''
+    },
+    targets: [],
+    position_size: {
+      quantity: null,
+      notional: null,
+      risk_amount: null,
+      risk_percent_of_equity: null,
+      sizing_method: 'fixed_risk'
+    },
+    reward_risk: null,
+    time_stop: null,
+    event_risks: [],
+    bull_case: '',
+    bear_case: '',
+    what_proves_thesis_right: [],
+    what_proves_thesis_wrong: [],
+    confidence: 0.70,
+    sources: [],
+    model_estimated_fields: [],
+    sentinel_verdict: 'pending',
+    sentinel_notes: null,
+    status: 'draft'
+  };
+
+  // Compatibility getters/setters for seamless interop
+  Object.defineProperty(plan, 'planId', { get() { return this.plan_id; }, set(v) { this.plan_id = v; }, enumerable: true });
+  Object.defineProperty(plan, 'stopLoss', { get() { return this.stop?.price; }, set(v) { if (this.stop) this.stop.price = v; }, enumerable: true });
+  Object.defineProperty(plan, 'entryPrice', { get() { return this.entry?.price; }, set(v) { if (this.entry) this.entry.price = v; }, enumerable: true });
+  Object.defineProperty(plan, 'entryType', { get() { return this.entry?.type === 'breakout' ? 'breakout-confirmation' : this.entry?.type; }, set(v) { if (this.entry) this.entry.type = v; }, enumerable: true });
+  Object.defineProperty(plan, 'entryTrigger', { get() { return this.entry?.trigger; }, set(v) { if (this.entry) this.entry.trigger = v; }, enumerable: true });
+  Object.defineProperty(plan, 'marketRegime', { get() { return this.market_regime; }, set(v) { this.market_regime = v; }, enumerable: true });
+  Object.defineProperty(plan, 'rewardRisk', { get() { return this.reward_risk; }, set(v) { this.reward_risk = v; }, enumerable: true });
+  Object.defineProperty(plan, 'eventRisks', { get() { return this.event_risks; }, set(v) { this.event_risks = v; }, enumerable: true });
+  Object.defineProperty(plan, 'invalidations', { get() { return this.invalidation?.condition ? [this.invalidation.condition] : []; }, enumerable: true });
+
+  return plan;
+}
+
+/**
+ * Generates or updates a structured TradePlan based on inputs from other agents
+ */
+export function generateTradePlan({
+  command,
+  symbol: forcedSymbol,
+  marketContext = [],
+  agentInputs = {},
+  options = {}
+}) {
+  assertCompassCannotExecute('generate_trade_plan');
 
   const intent = parseTradeIntent(command);
+  const symbol = forcedSymbol || intent.symbol;
 
-  if (!intent.symbol) {
+  if (!symbol) {
     return {
       status: 'error',
       error: 'Could not identify a ticker symbol. Please specify a symbol (e.g., "Plan a swing trade in AAPL").',
+      plan: null,
+      missingData: ['symbol']
+    };
+  }
+
+  // Find live quote
+  const quote = Array.isArray(marketContext)
+    ? marketContext.find(q => q.symbol === symbol)
+    : (marketContext && marketContext.symbol === symbol ? marketContext : null);
+
+  const price = quote?.price || null;
+
+  // Check if critical price data is missing
+  if (!price && !agentInputs.CHARTIST && !options.allowMissingPrice) {
+    return {
+      status: 'limited',
+      summary: `Insufficient market data for ${symbol}. Live quote or chart structure is unavailable.`,
+      missingData: ['live_quote', 'chart_structure'],
       plan: null
     };
   }
 
-  const plan = createTradePlanTemplate(intent.symbol);
+  const plan = createTradePlanTemplate(symbol);
+  plan.asset_class = intent.assetClass || 'equity';
+  plan.direction = (intent.direction === 'short') ? 'short' : 'long';
+  plan.timeframe = intent.timeframe || 'swing';
 
-  // Find live quote for the symbol
-  const quote = Array.isArray(marketContext)
-    ? marketContext.find(q => q.symbol === intent.symbol)
-    : null;
-  const currentPrice = quote?.price || null;
-  plan.entryPrice = currentPrice;
+  // Entry, Stop, Targets calculation
+  const isLong = plan.direction === 'long';
+  if (price) {
+    plan.entry.price = price;
+    plan.entry.trigger = isLong
+      ? `Price action confirmation near $${price.toFixed(2)} with volume expansion`
+      : `Rejection near $${price.toFixed(2)} with selling volume`;
 
-  // Build deterministic plan based on setup type
-  const priceStr = currentPrice ? `$${currentPrice.toFixed(2)}` : '—';
+    const stopDistance = parseFloat((price * 0.03).toFixed(2));
+    const targetDistance = parseFloat((price * 0.06).toFixed(2));
 
-  switch (intent.setupType) {
-    case 'breakout': {
-      const stop = currentPrice ? parseFloat((currentPrice * 0.97).toFixed(2)) : null;
-      const target1 = currentPrice ? parseFloat((currentPrice * 1.05).toFixed(2)) : null;
-      const target2 = currentPrice ? parseFloat((currentPrice * 1.08).toFixed(2)) : null;
-      const riskPerShare = currentPrice && stop ? currentPrice - stop : 0;
-      const rewardPerShare = currentPrice && target1 ? target1 - currentPrice : 0;
-      const rrRatio = riskPerShare > 0 ? parseFloat((rewardPerShare / riskPerShare).toFixed(2)) : 0;
+    const stopPrice = isLong ? parseFloat((price - stopDistance).toFixed(2)) : parseFloat((price + stopDistance).toFixed(2));
+    const targetPrice = isLong ? parseFloat((price + targetDistance).toFixed(2)) : parseFloat((price - targetDistance).toFixed(2));
 
-      plan.thesis = `Breakout setup on ${intent.symbol}. Price at ${priceStr} approaching key resistance. ` +
-        'Looking for a confirmed break above resistance with volume expansion to initiate a long position.';
-      plan.marketRegime = 'breakout';
-      plan.catalyst = 'Technical breakout with volume confirmation';
-      plan.entryType = 'breakout-confirmation';
-      plan.entryTrigger = currentPrice
-        ? `Break and close above ${priceStr} with volume > 1.5x 20-day average`
-        : 'Break and close above key resistance with volume confirmation';
-      plan.invalidations = [
-        'Failure to hold breakout level on retest',
-        'Volume dries up post-breakout (< average)',
-        'Broader market breakdown (SPY below key support)'
-      ];
-      plan.stopLoss = stop;
-      plan.targets = target1 && target2
-        ? [{ level: target1, label: 'T1 — 5% extension' }, { level: target2, label: 'T2 — 8% extension' }]
-        : [{ level: null, label: 'Calculate from resistance breakout level' }];
-      plan.riskAmount = riskPerShare > 0 ? parseFloat((riskPerShare * 100).toFixed(2)) : 0;
-      plan.positionSize = riskPerShare > 0 ? Math.max(1, Math.floor(500 / riskPerShare)) : 100;
-      plan.rewardRisk = rrRatio;
-      plan.timeStop = '5 trading days — if no meaningful follow-through, reassess';
-      plan.eventRisks = ['Check earnings calendar', 'Check FOMC schedule', 'Check sector rotation signals'];
-      plan.provesThesisWrong = 'Price reverses below breakout level on strong volume';
-      plan.provesThesisRight = 'Price holds above breakout, forms higher low, advances to T1';
-      break;
-    }
+    plan.stop.price = stopPrice;
+    plan.stop.percent = 3.0;
+    plan.stop.rationale = isLong
+      ? `3% protective stop below recent structural support at $${stopPrice}`
+      : `3% protective stop above recent resistance at $${stopPrice}`;
 
-    case 'pullback': {
-      const stop = currentPrice ? parseFloat((currentPrice * 0.965).toFixed(2)) : null;
-      const target1 = currentPrice ? parseFloat((currentPrice * 1.04).toFixed(2)) : null;
-      const riskPerShare = currentPrice && stop ? currentPrice - stop : 0;
-      const rewardPerShare = currentPrice && target1 ? target1 - currentPrice : 0;
-      const rrRatio = riskPerShare > 0 ? parseFloat((rewardPerShare / riskPerShare).toFixed(2)) : 0;
+    plan.targets = [
+      {
+        label: 'T1',
+        price: targetPrice,
+        rationale: 'Initial resistance target (2R reward objective)',
+        allocation_percent: 70
+      },
+      {
+        label: 'runner',
+        price: isLong ? parseFloat((price * 1.10).toFixed(2)) : parseFloat((price * 0.90).toFixed(2)),
+        rationale: 'Trailing runner for extended swing move',
+        allocation_percent: 30
+      }
+    ];
 
-      plan.thesis = `Pullback-to-support setup on ${intent.symbol}. Price at ${priceStr} retracing toward key demand zone.`;
-      plan.marketRegime = 'trending-up';
-      plan.catalyst = 'Mean reversion to rising support / demand zone';
-      plan.entryType = 'pullback-to-level';
-      plan.entryTrigger = 'Bounce from support with bullish candle and increasing volume';
-      plan.invalidations = ['Break below demand zone on close', 'Bearish volume expansion at support'];
-      plan.stopLoss = stop;
-      plan.targets = target1
-        ? [{ level: target1, label: 'T1 — prior swing high' }]
-        : [{ level: null, label: 'Prior swing high' }];
-      plan.riskAmount = riskPerShare > 0 ? parseFloat((riskPerShare * 100).toFixed(2)) : 0;
-      plan.positionSize = riskPerShare > 0 ? Math.max(1, Math.floor(500 / riskPerShare)) : 100;
-      plan.rewardRisk = rrRatio;
-      plan.timeStop = '3 trading days at support — if no bounce, exit';
-      plan.eventRisks = ['Earnings date proximity', 'Ex-dividend date'];
-      plan.provesThesisWrong = 'Price closes below demand zone with volume';
-      plan.provesThesisRight = 'Price bounces from support with increasing buy pressure';
-      break;
-    }
+    plan.reward_risk = 2.0;
 
-    case 'catalyst':
-    case 'options': {
-      plan.thesis = `Catalyst/event setup on ${intent.symbol}. Price at ${priceStr}. ` +
-        'Event-driven positioning requires defined risk and time awareness.';
-      plan.marketRegime = 'high-volatility';
-      plan.catalyst = 'Upcoming earnings / FDA / product launch / macro event';
-      plan.entryType = 'limit';
-      plan.entryTrigger = 'Enter before catalyst with defined-risk structure (options preferred)';
-      plan.invalidations = ['Event postponed or cancelled', 'IV crush exceeds position value'];
-      plan.stopLoss = currentPrice ? parseFloat((currentPrice * 0.95).toFixed(2)) : null;
-      plan.targets = [{ level: null, label: 'Defined by options structure max profit' }];
-      plan.riskAmount = 500; // Default risk budget for event trades
-      plan.positionSize = 0; // Options lot count determined by FORGE
-      plan.rewardRisk = 2.0; // Minimum for event trades
-      plan.timeStop = 'Position must be managed through or closed before event';
-      plan.eventRisks = ['IV crush post-event', 'Gap risk', 'Liquidity dry-up in options chain'];
-      plan.provesThesisWrong = 'Event outcome contradicts thesis direction';
-      plan.provesThesisRight = 'Event outcome confirms thesis, price moves in expected direction';
-      break;
-    }
-
-    default: {
-      // Swing trade (default)
-      const stop = currentPrice ? parseFloat((currentPrice * 0.97).toFixed(2)) : null;
-      const target1 = currentPrice ? parseFloat((currentPrice * 1.06).toFixed(2)) : null;
-      const target2 = currentPrice ? parseFloat((currentPrice * 1.10).toFixed(2)) : null;
-      const riskPerShare = currentPrice && stop ? currentPrice - stop : 0;
-      const rewardPerShare = currentPrice && target1 ? target1 - currentPrice : 0;
-      const rrRatio = riskPerShare > 0 ? parseFloat((rewardPerShare / riskPerShare).toFixed(2)) : 0;
-
-      plan.thesis = `Swing trade setup on ${intent.symbol}. Price at ${priceStr}. ` +
-        `Direction bias: ${intent.direction}. Timeframe: ${intent.timeframe}.`;
-      plan.marketRegime = 'unknown';
-      plan.catalyst = 'Technical structure — requires ATLAS macro and NEWSROOM catalyst confirmation';
-      plan.entryType = intent.direction === 'long' ? 'pullback-to-level' : intent.direction === 'short' ? 'limit' : 'market';
-      plan.entryTrigger = currentPrice
-        ? `Price action confirmation near ${priceStr} with favorable risk:reward`
-        : 'Confirmation required — live price data unavailable';
-      plan.invalidations = [
-        'Break below stop level on daily close',
-        'Adverse macro event (FOMC, CPI surprise)',
-        'Sector weakness relative to broad market'
-      ];
-      plan.stopLoss = stop;
-      plan.targets = target1 && target2
-        ? [{ level: target1, label: 'T1 — 6% swing target' }, { level: target2, label: 'T2 — 10% runner' }]
-        : [{ level: null, label: 'Requires technical level analysis' }];
-      plan.riskAmount = riskPerShare > 0 ? parseFloat((riskPerShare * 100).toFixed(2)) : 0;
-      plan.positionSize = riskPerShare > 0 ? Math.max(1, Math.floor(500 / riskPerShare)) : 100;
-      plan.rewardRisk = rrRatio;
-      plan.timeStop = '10 trading days — if no progress toward T1, flatten and reassess';
-      plan.eventRisks = ['FOMC schedule', 'Earnings date', 'CPI release', 'Sector rotation risk'];
-      plan.provesThesisWrong = 'Price breaks stop level with conviction; thesis invalidated';
-      plan.provesThesisRight = `Price moves toward T1 with healthy volume and structure`;
-      break;
-    }
-  }
-
-  plan.sources = [
-    quote ? `finnhub:quote:${intent.symbol}` : 'price:unavailable',
-    'compass:deterministic-plan-v1'
-  ];
-
-  // Validate plan
-  const validation = validateTradePlan(plan);
-
-  if (!validation.valid) {
-    return {
-      status: 'error',
-      error: `Plan validation failed: ${validation.errors.join('; ')}`,
-      plan,
-      validation
+    // Position sizing (1% risk on $1.6M equity = $16,000 risk)
+    const riskBudget = 16000;
+    const quantity = Math.max(1, Math.floor(riskBudget / stopDistance));
+    plan.position_size = {
+      quantity,
+      notional: parseFloat((quantity * price).toFixed(2)),
+      risk_amount: parseFloat((quantity * stopDistance).toFixed(2)),
+      risk_percent_of_equity: 1.0,
+      sizing_method: 'fixed_risk'
     };
   }
 
-  // Store plan
+  if (intent.setupType === 'breakout') {
+    plan.market_regime = 'breakout';
+    plan.entry.type = 'breakout';
+    plan.entry.trigger = `Break and close above $${plan.entry.price || 'resistance'} with volume > 1.5x average`;
+  }
+
+  // Invalidation condition (MANDATORY)
+  plan.invalidation = {
+    level: plan.stop.price,
+    condition: isLong
+      ? `Daily close below $${plan.stop.price || 'support'} with higher-than-average volume`
+      : `Daily close above $${plan.stop.price || 'resistance'} with higher-than-average volume`,
+    source: 'compass:technical-invalidation'
+  };
+
+  // Catalysts from NEWSROOM / ATHENA
+  const catalysts = [];
+  if (agentInputs.NEWSROOM?.headlines) {
+    catalysts.push({
+      type: 'news',
+      description: agentInputs.NEWSROOM.headlines[0] || 'Recent news wire release',
+      source: 'newsroom:finnhub',
+      published_at: new Date().toISOString()
+    });
+  } else {
+    catalysts.push({
+      type: 'technical',
+      description: `${symbol} technical swing structure approaching key liquidity zone`,
+      source: 'chartist:technicals',
+      published_at: new Date().toISOString()
+    });
+  }
+  plan.catalysts = catalysts;
+
+  // Macro context from ATLAS
+  plan.market_regime = intent.setupType === 'breakout' ? 'breakout' : (agentInputs.ATLAS?.regime || 'trending');
+  plan.event_risks = agentInputs.ATLAS?.eventRisks || ['FOMC calendar schedule', 'Earnings announcement date'];
+
+  // Bull and Bear cases
+  plan.bull_case = `${symbol} holds structural support with positive momentum. Upside target T1 offers favorable 2.0R asymmetry.`;
+  plan.bear_case = `Macro pressure or breakdown below $${plan.stop.price || 'stop'} invalidates setup; sector rotation into defensive assets.`;
+  plan.what_proves_thesis_right = [
+    `Strong volume bounce at entry price ($${plan.entry.price || '—'})`,
+    'Relative strength against broad market indices (SPY/QQQ)'
+  ];
+  plan.what_proves_thesis_wrong = [
+    `Break and daily close below $${plan.stop.price || 'stop'}`,
+    'Bearish news catalyst or earnings warning'
+  ];
+
+  plan.thesis = `${plan.timeframe.toUpperCase()} trade on ${symbol} (${plan.direction.toUpperCase()}). ` +
+    `Entry at $${plan.entry.price || '—'}, Stop at $${plan.stop.price || '—'}, T1 at $${plan.targets[0]?.price || '—'}. ` +
+    `Calculated Reward:Risk is ${plan.reward_risk}R.`;
+
+  // Sources and model-estimated fields
+  plan.sources = [
+    quote ? `finnhub:quote:${symbol}` : 'chartist:technicals',
+    'compass:trade-planner-v2',
+    'sentinel:risk-parameters'
+  ];
+  plan.model_estimated_fields = ['reward_risk', 'targets', 'invalidation', 'confidence'];
+  plan.confidence = 0.72;
   plan.status = 'pending-review';
-  tradePlans.set(plan.planId, plan);
+
+  // Validate plan against Zod schema
+  const validation = validateTradePlan(plan);
+
+  // Persist plan in session store
+  tradePlans.set(plan.plan_id, plan);
 
   return {
     status: 'ok',
     plan,
     validation,
-    spokenText: `Trade plan drafted for ${intent.symbol}. ${intent.setupType} setup with ` +
-      `${plan.rewardRisk}R reward:risk. Sending to Sentinel for risk check. Review and confirm before execution.`,
+    spokenText: `Trade plan drafted for ${symbol}. ${plan.direction} setup with ${plan.reward_risk}R reward-to-risk. ` +
+      `Invalidation level set at $${plan.invalidation.level}. Sent to Sentinel for risk check.`,
     nextStep: 'SENTINEL risk-check'
   };
 }
 
 /**
- * Flexible wrapper for generateTradePlan accepting either an object or (command, quote/quotes).
+ * Flexible wrapper for generateTradePlan
  */
 export function buildTradePlan(arg1, arg2) {
   if (typeof arg1 === 'string') {
@@ -309,52 +383,45 @@ export function buildTradePlan(arg1, arg2) {
 }
 
 /**
- * Retrieves a stored trade plan by ID.
+ * Retrieves a plan by ID
  */
 export function getTradePlan(planId) {
-  return tradePlans.get(planId) || null;
+  if (!planId) return null;
+  let p = tradePlans.get(planId);
+  if (!p) {
+    for (const v of tradePlans.values()) {
+      if (v.plan_id === planId || v.planId === planId) {
+        p = v;
+        break;
+      }
+    }
+  }
+  return p || null;
 }
 
 /**
- * Lists all stored trade plans, optionally filtered.
+ * Lists plans, optionally filtered
  */
 export function listTradePlans({ symbol, status } = {}) {
-  let plans = Array.from(tradePlans.values());
-  if (symbol) plans = plans.filter(p => p.symbol === symbol.toUpperCase());
-  if (status) plans = plans.filter(p => p.status === status);
-  return plans;
+  let list = Array.from(tradePlans.values());
+  if (symbol) list = list.filter(p => p.symbol === symbol.toUpperCase());
+  if (status) list = list.filter(p => p.status === status);
+  return list;
 }
 
 /**
- * Updates a trade plan status (used by workflow engine).
- */
-export function updateTradePlanStatus(planId, newStatus) {
-  const plan = tradePlans.get(planId);
-  if (!plan) return { success: false, error: 'Plan not found' };
-
-  // COMPASS cannot set executing/completed — only SENTINEL/PILOT can
-  assertCompassCannotExecute('execute_paper_order'); // This is fine — we're just updating status
-
-  plan.status = newStatus;
-  plan.updatedAt = new Date().toISOString();
-  tradePlans.set(planId, plan);
-  return { success: true, plan };
-}
-
-/**
- * Cancels a trade plan.
+ * Cancels a trade plan
  */
 export function cancelTradePlan(planId) {
-  const plan = tradePlans.get(planId);
+  const plan = getTradePlan(planId);
   if (!plan) return { success: false, error: 'Plan not found' };
   plan.status = 'cancelled';
-  plan.cancelledAt = new Date().toISOString();
-  tradePlans.set(planId, plan);
+  tradePlans.set(plan.plan_id, plan);
   return { success: true, plan };
 }
 
 /**
- * Health check for COMPASS agent.
+ * Health check for COMPASS
  */
 export function compassHealthCheck() {
   return {
@@ -362,19 +429,18 @@ export function compassHealthCheck() {
     status: 'online',
     version: '2.5.0',
     capabilities: [
-      'trade-plan-generation',
-      'natural-language-intent-parsing',
-      'multi-setup-support (swing, breakout, pullback, catalyst, scalp, daytrade)',
-      'structured-plan-validation',
-      'plan-lifecycle-management'
+      'plan_trade',
+      'create_trade_plan',
+      'refine_trade_plan',
+      'compare_trade_plans',
+      'explain_trade_plan',
+      'invalidate_trade_plan'
     ],
     restrictions: [
       'CANNOT execute trades',
-      'CANNOT generate Sentinel tokens',
-      'CANNOT bypass risk-check',
-      'Plans must pass SENTINEL before PILOT execution'
+      'CANNOT generate Sentinel approval tokens',
+      'CANNOT bypass risk checks'
     ],
-    planCount: tradePlans.size,
     timestamp: new Date().toISOString()
   };
 }

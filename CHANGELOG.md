@@ -9,21 +9,40 @@ All notable changes to this project will be documented in this file.
   - Multi-setup support: Swing, Breakout, Pullback-to-level, Catalyst/Earnings, Scalp, and Daytrade.
   - Full trade plan schema: Thesis, market regime, entry trigger, stop-loss, targets (T1/T2), reward:risk ratio (min 1.5R), position size, risk amount ($), invalidation conditions, and known event risks.
   - Strict security boundary: COMPASS is strictly prohibited from executing orders, generating Sentinel approval tokens, or bypassing risk gates.
-- **Persistent Multi-Step Workflow Engine (`services/workflow/workflowEngine.js`)**:
-  - Robust multi-agent workflow state machine (ATLAS → SCOUT → ATHENA → CHARTIST → ORACLE → COMPASS → SENTINEL → USER → PILOT → LEDGER).
-  - Out-of-the-box templates: `plan-swing-trade` (10 steps), `plan-breakout-trade` (8 steps), `pre-market-briefing` (5 steps), `earnings-catalyst-play` (9 steps).
-  - Mandatory user confirmation gates (`awaiting-user`) before any paper order execution, integration activation, risk limit modification, or data deletion.
+- **Deterministic Multi-Step Workflow Engine (`master/workflow/workflowEngine.js`, `master/workflow/sqlitePersistence.js`)**:
+  - Deterministic state machine coordinating multi-agent pipelines:
+    `ATLAS → NEWSROOM → ATHENA → CHARTIST → ORACLE → COMPASS → SENTINEL → USER (Gate) → PILOT (Phase 3)`
+  - Full SQLite persistence across 4 relational tables (`workflows`, `workflow_steps`, `workflow_events`, `workflow_artifacts`) with zero external C++ build dependencies via Node 22 native `node:sqlite`.
+  - Parallel execution group (`parallelGroup: market_intelligence`) running ATLAS, NEWSROOM, ATHENA, CHARTIST, and ORACLE concurrently with per-step timeouts (8000ms).
+  - Out-of-the-box templates: `plan_equity_swing_trade` (10 steps), `plan-breakout-trade` (8 steps), `pre-market-briefing` (5 steps), `earnings-catalyst-play` (9 steps).
+  - Mandatory human confirmation safety gate (`waiting_for_user`) before any paper order execution, integration activation, or risk boundary alteration.
   - Complete workflow lifecycle operations: Create, Advance, Confirm, Pause, Resume, Cancel, and HUD summary telemetry.
+- **Independent Sentinel Risk Review (`services/sentinelReview.js`)**:
+  - Pre-execution validation enforcing mandatory directional stop, $R:R \ge 1.5$, position size $\le 2\%$ portfolio risk limit, and imminent event/earnings conflict detection.
+  - Issues `SentinelVerdictSchema` (`approve`, `modify`, `veto`).
+  - Immutable veto rule: Vetoed plans cannot be approved by the user, and the UI disables the "Approve & Arm" button.
 - **Interactive Workflows View & Cyber-HUD Components (`WorkflowView.jsx`, `WorkflowTimeline.jsx`, `TradePlanCard.jsx`)**:
-  - Visual pipeline showing step-by-step agent execution with real-time status badges.
-  - High-priority pulsing safety gate alert banner with "CONFIRM & PROCEED" / "REJECT" controls.
+  - Visual pipeline showing step-by-step agent execution with real-time status badges and elapsed execution timer.
+  - High-priority safety gate banner ("Waiting For You") with "Approve & Arm" / "Reject Plan" controls.
   - 1-Click Template Launcher with quick ticker selector (NVDA, SPY, QQQ, AAPL, TSLA).
-  - COMPASS Trade Plan dossier card with color-coded R:R ratio, risk brackets, thesis, and 1-click Chart Level injection.
+  - COMPASS Trade Plan card with color-coded R:R ratio, risk brackets, thesis invalidations, source citation chips, and `MODEL-ESTIMATED` badges.
 - **API Server & Routing (`vite.config.js`, `services/geminiService.js`, `app/src/services/deskService.js`)**:
   - Live REST endpoints: `/api/workflows`, `/api/workflows/templates`, `/api/workflow/action`, `/api/compass/plan`, `/api/compass/plans`, `/api/compass/health`.
-  - Intent classification routing commands like "Plan a swing trade in AAPL" or "Plan a breakout trade for TSLA" to COMPASS and launching pipelines.
-- **Automated Test Suite**:
-  - 63/63 tests passing across 5 suites (`workflowEngine.test.js`, `compass.test.js`, `chartRouter.test.js`, `contract.test.js`, `config.test.js`).
+  - Intent classification routing commands like *"Plan a swing trade in AAPL"* or *"Should I buy 100 NVDA?"* directly to COMPASS and workflow pipelines.
+- **Architectural & Security Documentation**:
+  - Created [`ARCHITECTURE.md`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/ARCHITECTURE.md) documenting agent roster, state machine transitions, SQLite schema, and pipeline flow.
+  - Created [`SECURITY.md`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/SECURITY.md) documenting `LIVE_TRADING=false` enforcement, least privilege boundaries, Sentinel veto mechanics, and client renderer isolation.
+- **Automated Test Suite (100% Pass Rate)**:
+  - **85/85 tests passing** across 9 test suites:
+    - `tests/workflowEngine.test.js` (20 tests)
+    - `tests/config.test.js` (4 tests)
+    - `tests/chartRouter.test.js` (9 tests)
+    - `tests/contract/trade-plan/tradePlanContract.test.js` (6 tests)
+    - `tests/integration/trade-planning/tradePlanning.test.js` (3 tests)
+    - `tests/unit/workflow/workflowEngine.test.js` (7 tests)
+    - `tests/unit/compass/compass.test.js` (6 tests)
+    - `tests/compass.test.js` (25 tests)
+    - `tests/contract.test.js` (5 tests)
 
 ## [1.2.0-chart-takeover] - 2026-10-28
 ### Completed: Step C & Phase 8 – TradingView Full Chart Takeover & Trade Overlay Engine

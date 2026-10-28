@@ -22,6 +22,16 @@ import {
   listTradePlans,
   compassHealthCheck
 } from './agents/compass/compassAgent.js';
+import {
+  createWorkflow as createMasterWorkflow,
+  runTradePlanningWorkflow,
+  pauseWorkflow as pauseMasterWorkflow,
+  resumeWorkflow as resumeMasterWorkflow,
+  cancelWorkflow as cancelMasterWorkflow,
+  submitUserDecision,
+  getWorkflowSummary,
+  listWorkflows as listMasterWorkflows
+} from './master/workflow/workflowEngine.js';
 
 export default defineConfig({
   plugins: [
@@ -201,14 +211,26 @@ export default defineConfig({
           try {
             if (req.method === 'POST') {
               const body = await parseJson(req);
-              const wf = createWorkflow(body.templateId || body, body.params || {});
+              const symbol = (body.symbol || body.params?.symbol || 'AAPL').toUpperCase();
+              const goal = body.goal || `Plan a swing trade in ${symbol}`;
+              const wf = createMasterWorkflow({
+                goal,
+                symbol,
+                intent: body.intent || 'plan_trade',
+                template: body.templateId || 'plan_equity_swing_trade'
+              });
+              const quotes = await getLiveQuotes();
+              const completedWf = await runTradePlanningWorkflow(wf.workflow_id, {
+                marketContext: quotes
+              });
               res.setHeader('Content-Type', 'application/json');
-              return res.end(JSON.stringify({ status: 'ok', workflow: wf }));
+              return res.end(JSON.stringify({ status: 'ok', workflow: completedWf }));
             }
             if (req.method === 'GET') {
               const url = new URL(req.url, 'http://localhost');
               const status = url.searchParams.get('status') || undefined;
-              const list = listWorkflows({ status });
+              const symbol = url.searchParams.get('symbol') || undefined;
+              const list = listMasterWorkflows({ status, symbol });
               res.setHeader('Content-Type', 'application/json');
               return res.end(JSON.stringify({ status: 'ok', workflows: list }));
             }
@@ -220,7 +242,7 @@ export default defineConfig({
           }
         });
 
-        // 12. Workflow Actions (advance, confirm, pause, resume, cancel)
+        // 12. Workflow Actions (user_decision, approve, reject, modify, pause, resume, cancel)
         server.middlewares.use('/api/workflow/action', async (req, res) => {
           if (req.method !== 'POST') {
             res.statusCode = 405;
@@ -231,23 +253,31 @@ export default defineConfig({
             const { action, workflowId, stepIndex, result, confirmationData, reason } = body;
             let response;
             switch (action) {
+              case 'user_decision':
+              case 'approve':
+              case 'reject':
+              case 'modify': {
+                const decision = action === 'user_decision' ? (body.decision || 'approve') : action;
+                response = submitUserDecision(workflowId, decision, body.notes);
+                break;
+              }
               case 'advance':
                 response = advanceStep(workflowId, result);
                 break;
               case 'confirm':
-                response = confirmStep(workflowId, stepIndex, confirmationData);
+                response = submitUserDecision(workflowId, 'approve');
                 break;
               case 'pause':
-                response = pauseWorkflow(workflowId);
+                response = pauseMasterWorkflow(workflowId);
                 break;
               case 'resume':
-                response = resumeWorkflow(workflowId);
+                response = resumeMasterWorkflow(workflowId);
                 break;
               case 'cancel':
-                response = cancelWorkflow(workflowId, reason);
+                response = cancelMasterWorkflow(workflowId, reason);
                 break;
               case 'summary':
-                response = getWorkflowHudSummary(workflowId);
+                response = getWorkflowSummary(workflowId) || getWorkflowHudSummary(workflowId);
                 break;
               case 'get':
                 response = getWorkflow(workflowId);

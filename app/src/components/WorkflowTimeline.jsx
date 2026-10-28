@@ -1,18 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 /**
- * WorkflowTimeline — Visual pipeline for multi-agent workflows.
+ * WorkflowTimeline — Visual pipeline for multi-agent trade planning workflows.
  *
- * Sequence:
- *   ATLAS → SCOUT → ATHENA → CHARTIST → ORACLE → COMPASS → SENTINEL → USER → PILOT → LEDGER
- *
- * Mandatory safety gates:
- * - Workflow MUST stop for user confirmation before:
- *   - Placing any paper trade
- *   - Enabling an optional integration
- *   - Running a long backtest
- *   - Deleting journal data
- *   - Changing risk limits
+ * Requirements (Section 5):
+ * - Goal
+ * - Current step
+ * - Step list with status icons
+ * - Agent status
+ * - Elapsed time
+ * - Errors and timeouts
+ * - “Waiting for you” state
+ * - Pause / Resume / Cancel buttons
  */
 export default function WorkflowTimeline({
   workflow,
@@ -23,6 +22,21 @@ export default function WorkflowTimeline({
   onCancelWorkflow
 }) {
   const [confirming, setConfirming] = useState(false);
+  const [elapsedSec, setElapsedSec] = useState(0);
+
+  useEffect(() => {
+    if (!workflow?.created_at || workflow.status === 'completed' || workflow.status === 'cancelled') {
+      return;
+    }
+    const start = new Date(workflow.created_at).getTime();
+    const updateElapsed = () => {
+      const now = Date.now();
+      setElapsedSec(Math.max(0, Math.floor((now - start) / 1000)));
+    };
+    updateElapsed();
+    const timer = setInterval(updateElapsed, 1000);
+    return () => clearInterval(timer);
+  }, [workflow?.created_at, workflow?.status]);
 
   if (!workflow) {
     return (
@@ -30,114 +44,112 @@ export default function WorkflowTimeline({
         background: 'rgba(15, 23, 42, 0.65)',
         border: '1px dashed rgba(255, 255, 255, 0.15)',
         borderRadius: '6px',
-        padding: '24px',
+        padding: '28px',
         textAlign: 'center',
         color: 'var(--text-muted)',
         fontFamily: 'var(--font-data)',
         fontSize: '12px'
       }}>
-        NO ACTIVE WORKFLOW · SELECT A TEMPLATE OR ISSUE A PLANNING COMMAND
+        NO ACTIVE WORKFLOW · SELECT A TEMPLATE OR ISSUE COMMAND "Plan a swing trade in AAPL"
       </div>
     );
   }
 
   const steps = workflow.steps || [];
-  const currentStep = steps[workflow.currentStepIndex] || null;
-  const isAwaitingUser = workflow.status === 'awaiting-user';
+  const isAwaitingUser = workflow.awaiting_user || workflow.status === 'waiting_for_user' || workflow.status === 'awaiting-user';
   const isPaused = workflow.status === 'paused';
   const isCompleted = workflow.status === 'completed';
   const isCancelled = workflow.status === 'cancelled';
+  const currentStepId = workflow.current_step || steps[workflow.currentStepIndex]?.id || '';
 
   const getStatusBadge = (status) => {
     switch (status) {
+      case 'done':
       case 'completed':
         return { label: 'DONE', bg: 'rgba(34, 197, 94, 0.15)', color: 'var(--neon-green)', border: 'var(--neon-green)' };
       case 'running':
         return { label: 'RUNNING', bg: 'rgba(0, 240, 255, 0.15)', color: 'var(--neon-cyan)', border: 'var(--neon-cyan)' };
-      case 'awaiting-user':
-        return { label: 'GATED (USER)', bg: 'rgba(234, 179, 8, 0.2)', color: 'var(--neon-amber)', border: 'var(--neon-amber)' };
-      case 'blocked':
-        return { label: 'BLOCKED', bg: 'rgba(239, 68, 68, 0.2)', color: 'var(--neon-red)', border: 'var(--neon-red)' };
+      case 'timeout':
+        return { label: 'TIMEOUT', bg: 'rgba(234, 179, 8, 0.2)', color: 'var(--neon-amber)', border: 'var(--neon-amber)' };
+      case 'error':
       case 'failed':
-        return { label: 'FAILED', bg: 'rgba(239, 68, 68, 0.2)', color: 'var(--neon-red)', border: 'var(--neon-red)' };
+        return { label: 'ERROR', bg: 'rgba(239, 68, 68, 0.2)', color: 'var(--neon-red)', border: 'var(--neon-red)' };
+      case 'waiting_for_user':
+      case 'awaiting-user':
+        return { label: 'WAITING FOR YOU', bg: 'rgba(234, 179, 8, 0.25)', color: 'var(--neon-amber)', border: 'var(--neon-amber)' };
       default:
-        return { label: 'QUEUED', bg: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-muted)', border: 'rgba(255, 255, 255, 0.15)' };
+        return { label: 'PENDING', bg: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-muted)', border: 'rgba(255, 255, 255, 0.15)' };
     }
   };
 
   return (
     <div style={{
-      background: 'rgba(10, 15, 29, 0.85)',
-      backdropFilter: 'blur(12px)',
+      background: 'rgba(10, 15, 29, 0.90)',
+      backdropFilter: 'blur(16px)',
       border: '1px solid rgba(255, 255, 255, 0.12)',
       borderRadius: '8px',
-      padding: '16px 20px',
-      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
+      padding: '18px 22px',
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)'
     }}>
-      {/* Header */}
+      {/* 1. Header Bar: Goal, Status, Elapsed Time, Controls */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-        paddingBottom: '12px',
+        paddingBottom: '14px',
         marginBottom: '16px'
       }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{
-              fontSize: '15px',
+              fontSize: '16px',
               fontWeight: 800,
               fontFamily: 'var(--font-display)',
               color: '#ffffff',
               letterSpacing: '0.8px'
             }}>
-              {workflow.name || 'Trading Workflow'}
+              {workflow.goal || workflow.name || 'Trade Planning Workflow'}
             </span>
+
             <span style={{
-              fontSize: '10px',
+              fontSize: '9.5px',
               fontFamily: 'var(--font-data)',
               padding: '2px 8px',
               borderRadius: '3px',
-              background: isAwaitingUser ? 'rgba(234, 179, 8, 0.2)' : isCompleted ? 'rgba(34, 197, 94, 0.2)' : isPaused ? 'rgba(148, 163, 184, 0.2)' : 'rgba(0, 240, 255, 0.2)',
+              background: isAwaitingUser ? 'rgba(234, 179, 8, 0.25)' : isCompleted ? 'rgba(34, 197, 94, 0.2)' : isPaused ? 'rgba(148, 163, 184, 0.2)' : 'rgba(0, 240, 255, 0.2)',
               color: isAwaitingUser ? 'var(--neon-amber)' : isCompleted ? 'var(--neon-green)' : isPaused ? '#94a3b8' : 'var(--neon-cyan)',
               border: `1px solid ${isAwaitingUser ? 'var(--neon-amber)' : isCompleted ? 'var(--neon-green)' : isPaused ? '#94a3b8' : 'var(--neon-cyan)'}`,
-              fontWeight: 700,
+              fontWeight: 800,
               textTransform: 'uppercase'
             }}>
-              {workflow.status}
+              {isAwaitingUser ? 'WAITING FOR YOU' : (workflow.status || 'CREATED').toUpperCase()}
             </span>
           </div>
 
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-data)', marginTop: '4px' }}>
-            ID: <span style={{ color: 'var(--neon-cyan)' }}>{workflow.workflowId}</span>
-            {workflow.params?.symbol && (
-              <span style={{ marginLeft: '12px' }}>
-                Symbol: <strong style={{ color: '#ffffff' }}>{workflow.params.symbol}</strong>
-              </span>
-            )}
-            <span style={{ marginLeft: '12px' }}>
-              Progress: <strong style={{ color: '#ffffff' }}>
-                {steps.filter(s => s.status === 'completed').length} / {steps.length} steps
-              </strong>
-            </span>
+          <div style={{ display: 'flex', gap: '16px', marginTop: '6px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-data)' }}>
+            <span>SYMBOL: <strong style={{ color: 'var(--neon-cyan)' }}>{workflow.symbol || 'AAPL'}</strong></span>
+            <span>CURRENT STEP: <strong style={{ color: '#ffffff' }}>{currentStepId || '—'}</strong></span>
+            <span>ELAPSED: <strong style={{ color: 'var(--neon-cyan)' }}>{elapsedSec}s</strong></span>
+            <span>PROGRESS: <strong style={{ color: '#ffffff' }}>{steps.filter(s => s.status === 'done' || s.status === 'completed').length} / {steps.length} steps</strong></span>
           </div>
         </div>
 
         {/* Master Workflow Controls */}
-        <div style={{ display: 'flex', gap: '6px' }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
           {!isCompleted && !isCancelled && (
             <>
               {isPaused ? (
                 <button
-                  onClick={() => onResumeWorkflow && onResumeWorkflow(workflow.workflowId)}
+                  onClick={() => onResumeWorkflow && onResumeWorkflow(workflow.workflow_id || workflow.workflowId)}
                   style={{
                     background: 'rgba(34, 197, 94, 0.15)',
                     border: '1px solid var(--neon-green)',
                     color: 'var(--neon-green)',
                     fontFamily: 'var(--font-data)',
                     fontSize: '10px',
-                    padding: '4px 10px',
+                    fontWeight: 700,
+                    padding: '5px 12px',
                     borderRadius: '3px',
                     cursor: 'pointer'
                   }}
@@ -146,14 +158,15 @@ export default function WorkflowTimeline({
                 </button>
               ) : (
                 <button
-                  onClick={() => onPauseWorkflow && onPauseWorkflow(workflow.workflowId)}
+                  onClick={() => onPauseWorkflow && onPauseWorkflow(workflow.workflow_id || workflow.workflowId)}
                   style={{
                     background: 'rgba(234, 179, 8, 0.15)',
                     border: '1px solid var(--neon-amber)',
                     color: 'var(--neon-amber)',
                     fontFamily: 'var(--font-data)',
                     fontSize: '10px',
-                    padding: '4px 10px',
+                    fontWeight: 700,
+                    padding: '5px 12px',
                     borderRadius: '3px',
                     cursor: 'pointer'
                   }}
@@ -163,14 +176,15 @@ export default function WorkflowTimeline({
               )}
 
               <button
-                onClick={() => onCancelWorkflow && onCancelWorkflow(workflow.workflowId, 'User requested cancel')}
+                onClick={() => onCancelWorkflow && onCancelWorkflow(workflow.workflow_id || workflow.workflowId, 'User requested cancellation')}
                 style={{
                   background: 'rgba(239, 68, 68, 0.15)',
                   border: '1px solid var(--neon-red)',
                   color: 'var(--neon-red)',
                   fontFamily: 'var(--font-data)',
                   fontSize: '10px',
-                  padding: '4px 10px',
+                  fontWeight: 700,
+                  padding: '5px 12px',
                   borderRadius: '3px',
                   cursor: 'pointer'
                 }}
@@ -182,112 +196,109 @@ export default function WorkflowTimeline({
         </div>
       </div>
 
-      {/* Mandatory User Confirmation Alert Gate */}
-      {isAwaitingUser && currentStep && (
+      {/* 2. "Waiting For You" State Banner */}
+      {isAwaitingUser && (
         <div style={{
           background: 'rgba(234, 179, 8, 0.12)',
           border: '1px solid var(--neon-amber)',
           borderRadius: '6px',
-          padding: '14px',
+          padding: '14px 18px',
           marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
           animation: 'pulseGlow 2s infinite ease-in-out'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{
-                color: 'var(--neon-amber)',
-                fontWeight: 800,
+          <div>
+            <div style={{
+              color: 'var(--neon-amber)',
+              fontWeight: 800,
+              fontFamily: 'var(--font-data)',
+              fontSize: '11px',
+              letterSpacing: '0.8px',
+              textTransform: 'uppercase'
+            }}>
+              🛑 SAFETY GATE ACTIVE · WAITING FOR YOUR APPROVAL
+            </div>
+            <div style={{ color: '#ffffff', fontSize: '13px', marginTop: '3px', fontWeight: 600 }}>
+              COMPASS has drafted the trade plan and SENTINEL has completed the risk review.
+            </div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '2px', fontFamily: 'var(--font-data)' }}>
+              PILOT execution does not run without your explicit approval. Review the Trade Plan card below.
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              disabled={confirming}
+              onClick={async () => {
+                setConfirming(true);
+                try {
+                  if (onConfirmStep) {
+                    await onConfirmStep(workflow.workflow_id || workflow.workflowId, 'approve');
+                  }
+                } finally {
+                  setConfirming(false);
+                }
+              }}
+              style={{
+                background: 'rgba(34, 197, 94, 0.25)',
+                border: '1px solid var(--neon-green)',
+                color: '#ffffff',
                 fontFamily: 'var(--font-data)',
                 fontSize: '11px',
-                letterSpacing: '0.8px',
-                textTransform: 'uppercase',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}>
-                <span>🛑 SAFETY GATE ACTIVE · USER CONFIRMATION MANDATORY</span>
-              </div>
-              <div style={{ color: '#ffffff', fontSize: '13px', marginTop: '4px', fontWeight: 600 }}>
-                Step {workflow.currentStepIndex + 1}: {currentStep.task}
-              </div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '2px', fontFamily: 'var(--font-data)' }}>
-                Agent: <strong style={{ color: 'var(--neon-cyan)' }}>{currentStep.agent}</strong> · F.R.I.D.A.Y. safety rules forbid autonomous execution without explicit human approval.
-              </div>
-            </div>
+                fontWeight: 800,
+                padding: '8px 16px',
+                borderRadius: '4px',
+                cursor: confirming ? 'wait' : 'pointer',
+                letterSpacing: '0.8px'
+              }}
+            >
+              {confirming ? 'CONFIRMING...' : '✓ APPROVE PLAN'}
+            </button>
 
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                disabled={confirming}
-                onClick={async () => {
-                  setConfirming(true);
-                  try {
-                    await onConfirmStep(workflow.workflowId, workflow.currentStepIndex, { approved: true, confirmedBy: 'USER' });
-                  } finally {
-                    setConfirming(false);
-                  }
-                }}
-                style={{
-                  background: 'rgba(34, 197, 94, 0.25)',
-                  border: '1px solid var(--neon-green)',
-                  color: '#ffffff',
-                  fontFamily: 'var(--font-data)',
-                  fontSize: '11px',
-                  fontWeight: 800,
-                  padding: '8px 16px',
-                  borderRadius: '4px',
-                  cursor: confirming ? 'wait' : 'pointer',
-                  letterSpacing: '0.8px'
-                }}
-              >
-                {confirming ? 'CONFIRMING...' : '✓ CONFIRM & PROCEED'}
-              </button>
-
-              <button
-                onClick={() => onCancelWorkflow && onCancelWorkflow(workflow.workflowId, 'User rejected step approval')}
-                style={{
-                  background: 'rgba(239, 68, 68, 0.15)',
-                  border: '1px solid var(--neon-red)',
-                  color: 'var(--neon-red)',
-                  fontFamily: 'var(--font-data)',
-                  fontSize: '11px',
-                  padding: '8px 12px',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                ✕ REJECT
-              </button>
-            </div>
+            <button
+              onClick={() => onCancelWorkflow && onCancelWorkflow(workflow.workflow_id || workflow.workflowId, 'User rejected plan')}
+              style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid var(--neon-red)',
+                color: 'var(--neon-red)',
+                fontFamily: 'var(--font-data)',
+                fontSize: '11px',
+                padding: '8px 14px',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              ✕ REJECT
+            </button>
           </div>
         </div>
       )}
 
-      {/* Steps Pipeline */}
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px'
-      }}>
+      {/* 3. Steps Pipeline */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {steps.map((st, idx) => {
           const badge = getStatusBadge(st.status);
-          const isCurrent = idx === workflow.currentStepIndex;
+          const isCurrent = st.id === currentStepId || (st.status === 'running');
+          const hasError = st.status === 'error' || st.status === 'timeout';
 
           return (
             <div
-              key={idx}
+              key={st.id || idx}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '36px 120px 1fr 110px 90px',
+                gridTemplateColumns: '36px 130px 1fr 120px',
                 alignItems: 'center',
                 gap: '12px',
-                background: isCurrent ? 'rgba(0, 240, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
-                border: `1px solid ${isCurrent ? 'rgba(0, 240, 255, 0.3)' : 'rgba(255, 255, 255, 0.05)'}`,
+                background: isCurrent ? 'rgba(0, 240, 255, 0.06)' : hasError ? 'rgba(239, 68, 68, 0.05)' : 'rgba(255, 255, 255, 0.02)',
+                border: `1px solid ${isCurrent ? 'rgba(0, 240, 255, 0.35)' : hasError ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.05)'}`,
                 borderRadius: '5px',
                 padding: '8px 12px',
                 transition: 'all 0.2s ease'
               }}
             >
-              {/* Step Number */}
+              {/* Index */}
               <div style={{
                 fontFamily: 'var(--font-data)',
                 fontSize: '11px',
@@ -298,60 +309,49 @@ export default function WorkflowTimeline({
                 #{idx + 1}
               </div>
 
-              {/* Agent Node */}
+              {/* Agent Badge */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{
                   display: 'inline-block',
                   width: '7px',
                   height: '7px',
                   borderRadius: '50%',
-                  background: st.status === 'completed' ? 'var(--neon-green)' : isCurrent ? 'var(--neon-cyan)' : '#64748b'
+                  background: (st.status === 'done' || st.status === 'completed') ? 'var(--neon-green)' : isCurrent ? 'var(--neon-cyan)' : hasError ? 'var(--neon-red)' : '#64748b'
                 }} />
                 <span style={{
                   fontFamily: 'var(--font-display)',
                   fontSize: '11px',
-                  fontWeight: 700,
+                  fontWeight: 800,
                   color: '#ffffff',
-                  letterSpacing: '0.5px'
+                  letterSpacing: '0.6px'
                 }}>
                   {st.agent}
                 </span>
-                {st.requiresUser && (
-                  <span style={{
-                    fontSize: '8px',
-                    color: 'var(--neon-amber)',
-                    fontFamily: 'var(--font-data)',
-                    background: 'rgba(234, 179, 8, 0.1)',
-                    padding: '1px 3px',
-                    borderRadius: '2px'
-                  }}>
-                    GATE
-                  </span>
-                )}
               </div>
 
-              {/* Task Description */}
-              <div style={{
-                fontSize: '11.5px',
-                color: st.status === 'completed' ? '#cbd5e1' : isCurrent ? '#ffffff' : 'var(--text-muted)',
-                lineHeight: '1.3'
-              }}>
-                {st.task}
-                {st.result && (
+              {/* Task & Detail */}
+              <div style={{ fontSize: '11.5px', color: (st.status === 'done' || st.status === 'completed') ? '#cbd5e1' : isCurrent ? '#ffffff' : 'var(--text-muted)' }}>
+                <div>{st.task}</div>
+                {st.response_ref && (
                   <div style={{ fontSize: '9.5px', color: 'var(--neon-green)', fontFamily: 'var(--font-data)', marginTop: '2px' }}>
-                    ✓ {typeof st.result === 'string' ? st.result : 'Result captured and validated.'}
+                    ✓ {st.response_ref}
+                  </div>
+                )}
+                {st.error && (
+                  <div style={{ fontSize: '9.5px', color: 'var(--neon-red)', fontFamily: 'var(--font-data)', marginTop: '2px' }}>
+                    ⚠ {st.error}
                   </div>
                 )}
               </div>
 
               {/* Status Badge */}
-              <div>
+              <div style={{ textAlign: 'right' }}>
                 <span style={{
                   display: 'inline-block',
                   fontSize: '9px',
                   fontFamily: 'var(--font-data)',
-                  fontWeight: 700,
-                  padding: '2px 6px',
+                  fontWeight: 800,
+                  padding: '2px 8px',
                   borderRadius: '2px',
                   background: badge.bg,
                   color: badge.color,
@@ -359,27 +359,6 @@ export default function WorkflowTimeline({
                 }}>
                   {badge.label}
                 </span>
-              </div>
-
-              {/* Individual Advance Button (for testing / manual stepping) */}
-              <div style={{ textAlign: 'right' }}>
-                {isCurrent && st.status === 'running' && !st.requiresUser && (
-                  <button
-                    onClick={() => onAdvanceStep && onAdvanceStep(workflow.workflowId, { summary: `${st.agent} completed task` })}
-                    style={{
-                      background: 'rgba(0, 240, 255, 0.1)',
-                      border: '1px solid rgba(0, 240, 255, 0.3)',
-                      color: 'var(--neon-cyan)',
-                      fontFamily: 'var(--font-data)',
-                      fontSize: '9.5px',
-                      padding: '3px 8px',
-                      borderRadius: '3px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    ADVANCE ▶
-                  </button>
-                )}
               </div>
             </div>
           );

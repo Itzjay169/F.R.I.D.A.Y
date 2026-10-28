@@ -26,16 +26,14 @@ F.R.I.D.A.Y. is a voice-driven AI trading research desk powered by a central orc
 
 ## 🧭 COMPASS Trade Planner & Workflow Engine (Phase 2.5)
 - **Deterministic Trade Planning**: Commands such as *"Plan a swing trade in AAPL"* or *"Create a breakout plan for TSLA"* yield complete structured trade plans (entry trigger, stop-loss, targets T1/T2, reward:risk, position size, and thesis invalidations).
-- **Persistent Workflow State Machine**: Coordinates multi-agent sequence pipelines:
-  `ATLAS → SCOUT → ATHENA → CHARTIST → ORACLE → COMPASS → SENTINEL → USER → PILOT → LEDGER`
-- **Mandatory User Confirmation Gates**: Workflows halt automatically and require explicit human approval before placing paper trades or changing risk boundaries.
-- **HUD Workflows View**: Full interactive pipeline monitor with step advancement, pause/resume, and COMPASS trade plan dossiers.
+- **Persistent Workflow State Machine (`master/workflow`)**: Executes deterministic pipelines with full SQLite persistence across 4 tables (`workflows`, `workflow_steps`, `workflow_events`, `workflow_artifacts`).
+- **Parallel Intelligence Gathering**: Concurrently executes `[ATLAS, NEWSROOM, ATHENA, CHARTIST, ORACLE]` with per-step timeouts (default 8000ms), followed by COMPASS plan synthesis and SENTINEL independent risk review.
+- **Mandatory User Confirmation Gates**: Workflows halt automatically at step 9 (`waiting_for_user`) and require explicit human approval before placing paper trades or changing risk boundaries. If Sentinel issues a VETO, the "Approve & Arm" button is permanently disabled.
+- **HUD Workflows View**: Multi-agent pipeline visualizer (`WorkflowTimeline`), dynamic step status badges, and COMPASS trade plan card (`TradePlanCard`) with source citations and confidence indicators.
 
-## Safety & Compliance
-- `LIVE_TRADING=false` is enforced at the kernel level.
-- No analysis agent can place orders.
-- PILOT rejects any trade proposal without a valid, non-expired Sentinel signature.
-- All figures cite verifiable sources (`finnhub`, `sec-edgar`, `local-ledger`).
+## 🛡️ Architecture & Security Documents
+- 📐 **System Architecture**: Detailed in [ARCHITECTURE.md](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/ARCHITECTURE.md) (agent roster, state machine transitions, SQLite relational tables, and parallel execution pipeline).
+- 🔒 **Security Policy**: Detailed in [SECURITY.md](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/SECURITY.md) (kernel-level `LIVE_TRADING=false`, analysis agent execution veto, single gated money path, and zero-secrets client isolation).
 
 ---
 
@@ -108,6 +106,19 @@ npm run dev
 - [x] Shared message contract validation with mandatory sources (`tests/contract.test.js`)
 - [x] Configuration & safety rule tests (`tests/config.test.js`)
 
+
+## Phase 2.5 Pass/Fail Checklist (COMPASS & Workflow Engine)
+- [x] Specialist agent **COMPASS** in [`agents/compass`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/agents/compass) with `TradePlanSchema` Zod validation
+- [x] Persistent workflow state machine in [`master/workflow`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/master/workflow) with SQLite persistence
+- [x] 4 SQLite relational tables: `workflows`, `workflow_steps`, `workflow_events`, and `workflow_artifacts`
+- [x] Parallel intelligence gathering: concurrent execution of `[ATLAS, NEWSROOM, ATHENA, CHARTIST, ORACLE]` with 8000ms timeouts
+- [x] Default 10-step template: `plan_equity_swing_trade` synthesizing macro, news, fundamentals, technicals, and quant outlook
+- [x] Independent Sentinel risk review ([`services/sentinelReview.js`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/services/sentinelReview.js)) enforcing mandatory stop, $R:R \ge 1.5$, position size limits, and catalyst conflict checks
+- [x] Mandatory Human Confirmation Gate (`waiting_for_user`) with disabled Approve button on Sentinel VETO
+- [x] Cyber-HUD visualization: [`WorkflowTimeline.jsx`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/app/src/components/WorkflowTimeline.jsx) and [`TradePlanCard.jsx`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/app/src/components/TradePlanCard.jsx) with source chips and model-estimated tags
+- [x] Zero PILOT execution in Phase 2.5: strict pipeline termination prior to live or paper order submission
+- [x] 100% test pass rate: **85/85 tests passing** across 9 test suites
+- [x] Architectural & Security documentation: [`ARCHITECTURE.md`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/ARCHITECTURE.md) and [`SECURITY.md`](file:///c:/Users/jayki/OneDrive/Desktop/FRIDAY/SECURITY.md)
 
 ---
 
